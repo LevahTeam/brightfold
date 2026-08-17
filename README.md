@@ -8,6 +8,11 @@ it, and print the cards in one place.
 The app assumes two users—a volunteer and the pastor—working from the same
 records.
 
+**[Try the live demo →](https://brightfold.fly.dev)** Every name in it is
+invented, no sign-in is needed, and you get your own sample data to edit. The
+real app is not published anywhere; see
+[Privacy and deployment](#the-demo-is-the-only-thing-published) for why.
+
 > **Setting it up for real use? Read [`RUNNING-IT.md`](RUNNING-IT.md).** It
 > covers running the app on one church computer that both of you reach, with
 > the records never leaving that machine. This file covers the app itself and
