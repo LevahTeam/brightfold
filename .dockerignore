@@ -1,0 +1,31 @@
+# Build artefacts and local state — never wanted in the image.
+node_modules
+.next
+.next-e2e
+.next-verify
+.next-deploy
+.next-repro
+.next-sa
+data
+test-results
+playwright-report
+.git
+
+# Secrets. The runtime supplies these as environment variables instead.
+.env
+.env.local
+
+# Documentation.
+*.md
+design/*.md
+
+# NOTE: `design/` itself must NOT be excluded. `app/globals.css` imports
+# `../design/tokens.css`, so dropping that directory breaks `next build`
+# inside the image with "Can't resolve '../design/tokens.css'". Only the
+# markdown in there is documentation; the CSS is source.
+
+# Tests are not needed to build or run the server. tsconfig includes them, but
+# their absence just means fewer files to check.
+tests
+playwright.config.ts
+vitest.config.ts

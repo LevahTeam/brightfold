@@ -1,0 +1,1152 @@
+@import url("https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400&family=Inter:wght@400..700&family=Noto+Sans+KR:wght@400..700&display=swap");
+@import "../design/tokens.css";
+
+/* ============================================================ reset + base */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100dvh;
+  background: var(--surface-page);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  line-height: var(--leading-heading);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+h1 {
+  font-size: var(--text-3xl);
+}
+h2 {
+  font-size: var(--text-xl);
+}
+h3 {
+  font-size: var(--text-lg);
+}
+
+a {
+  color: var(--text-link);
+  text-underline-offset: 2px;
+}
+a:hover {
+  color: var(--text-link-hover);
+}
+
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+.korean {
+  font-family: var(--font-korean-ui);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ================================================================== layout */
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-header);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: var(--layout-header-h);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-card);
+  border-bottom: var(--border-width-default) solid var(--border-default);
+  box-shadow: var(--shadow-sm);
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.brand span {
+  color: var(--color-accent-text);
+}
+
+.app-nav {
+  display: flex;
+  gap: var(--space-1);
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.app-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.app-nav a {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.app-nav a:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+.app-nav a[aria-current="page"] {
+  background: var(--surface-selected);
+  color: var(--color-primary-text);
+}
+
+.main {
+  max-width: var(--layout-content-max);
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4) var(--space-10);
+}
+
+.main--wide {
+  max-width: none;
+}
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.page-head p {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin-top: var(--space-1);
+  max-width: var(--layout-prose-max);
+}
+
+/* ================================================================== cards */
+
+.card {
+  background: var(--surface-card);
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-5);
+}
+
+.card + .card {
+  margin-top: var(--space-4);
+}
+
+.card-title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  margin-bottom: var(--space-1);
+}
+
+.card-sub {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+/* ================================================================ controls */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--control-h-md);
+  padding: 0 var(--control-pad-x);
+  border-radius: var(--radius-md);
+  border: var(--border-width-default) solid transparent;
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  background: var(--color-primary);
+  color: var(--text-on-primary);
+}
+.btn--primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+.btn--primary:active:not(:disabled) {
+  background: var(--color-primary-active);
+}
+
+.btn--secondary {
+  background: var(--surface-card);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+.btn--secondary:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.btn--ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+.btn--ghost:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.btn--danger {
+  background: var(--status-danger-fill);
+  color: var(--status-danger-on-fill);
+}
+.btn--danger:hover:not(:disabled) {
+  background: var(--status-danger-hover);
+}
+
+.btn--sm {
+  min-height: var(--control-h-sm);
+  font-size: var(--text-xs);
+  padding: 0 var(--space-3);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.field > label,
+.label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+
+.input,
+.select {
+  min-height: var(--control-h-md);
+  padding: 0 var(--space-3);
+  background: var(--input-bg);
+  border: var(--border-width-default) solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  width: 100%;
+}
+
+.input::placeholder {
+  color: var(--input-placeholder);
+}
+
+.input:disabled,
+.select:disabled {
+  background: var(--input-bg-disabled);
+  cursor: not-allowed;
+}
+
+.hint {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* ================================================================ messages */
+
+.alert {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: var(--border-width-default) solid;
+  font-size: var(--text-sm);
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.alert--error {
+  background: var(--status-danger-bg);
+  border-color: var(--status-danger-border);
+  color: var(--status-danger-text);
+}
+.alert--warning {
+  background: var(--status-warning-bg);
+  border-color: var(--status-warning-border);
+  color: var(--status-warning-text);
+}
+.alert--success {
+  background: var(--status-success-bg);
+  border-color: var(--status-success-border);
+  color: var(--status-success-text);
+}
+.alert--info {
+  background: var(--status-info-bg);
+  border-color: var(--status-info-border);
+  color: var(--status-info-text);
+}
+
+.empty {
+  text-align: center;
+  padding: var(--space-10) var(--space-4);
+  color: var(--text-muted);
+}
+.empty h2 {
+  margin-bottom: var(--space-2);
+}
+.empty p {
+  font-size: var(--text-sm);
+  max-width: 44ch;
+  margin: 0 auto var(--space-5);
+}
+
+/* =================================================================== table */
+
+.table-wrap {
+  overflow: auto;
+  /* Keeps a tabbed-to cell clear of the pinned columns. Without it the browser
+     considers an element under an overlay "in view" and does not scroll, so a
+     keyboard user types into a field they cannot see. */
+  scroll-padding-inline: calc(var(--table-name-col-w) + var(--table-korean-col-w)) 88px;
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  max-height: 72dvh;
+}
+
+table.grid {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums lining-nums;
+  width: max-content;
+  min-width: 100%;
+}
+
+table.grid th,
+table.grid td {
+  border-bottom: var(--border-width-hairline) solid var(--border-subtle);
+  border-right: var(--border-width-hairline) solid var(--border-subtle);
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  height: var(--table-row-h);
+  background: var(--surface-card);
+  /* The name and total columns are sticky and sit above the scrolling cells.
+     Without this, scrolling a cell into view (by tab, by tap, or by the
+     browser) can park it underneath one of them, where it cannot be tapped at
+     all — which on a phone made the leftmost attendance toggles unreachable. */
+  scroll-margin-inline-start: var(--table-name-col-w);
+  scroll-margin-inline-end: 80px;
+}
+
+table.grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--surface-sunken);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+table.grid thead tr:first-child th {
+  border-bottom-width: var(--border-width-default);
+}
+
+/* Sticky identity columns so names stay put while weeks scroll. */
+/* Both identity columns are pinned. The Korean name is the real identifier on
+   these sheets, so losing it after ~200px of scroll left rows unidentifiable.
+   Widths are fixed rather than min-only, because the Korean column's `left`
+   offset must match the English column's actual rendered width — a long name
+   would otherwise push the two out of alignment. */
+.col-name {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  width: var(--table-name-col-w);
+  min-width: var(--table-name-col-w);
+  max-width: var(--table-name-col-w);
+  border-right: var(--border-width-hairline) solid var(--border-subtle) !important;
+  font-weight: var(--weight-medium);
+}
+
+.col-korean {
+  position: sticky;
+  left: var(--table-name-col-w);
+  z-index: 2;
+  width: var(--table-korean-col-w);
+  min-width: var(--table-korean-col-w);
+  max-width: var(--table-korean-col-w);
+  border-right: var(--border-width-default) solid var(--border-default) !important;
+}
+
+thead .col-korean {
+  z-index: 4;
+}
+
+/* A soft edge at each pinned boundary. In light mode the pinned cells and the
+   data cells share a background, so without this nothing signals that content
+   is sliding underneath. */
+.col-korean::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -7px;
+  width: 7px;
+  pointer-events: none;
+  background: linear-gradient(to right, rgba(32, 27, 20, 0.12), transparent);
+}
+
+/* A name longer than the column shortens rather than widening it. */
+.col-name > span,
+.col-korean > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Specificity matters here: `table.grid thead th` (0,1,3) outranks a bare
+   `thead .col-name` (0,1,1), so the sticky header cells have to be qualified
+   the same way or they never get their raised z-index — and the scrolling
+   week headers paint straight through them. */
+table.grid thead th.col-name {
+  z-index: 5;
+}
+
+.col-att,
+.col-qt {
+  width: var(--table-att-col-w);
+  min-width: var(--table-att-col-w);
+  text-align: center !important;
+  padding: var(--space-1) !important;
+}
+
+.week-group {
+  text-align: center !important;
+  border-left: var(--border-width-default) solid var(--border-default) !important;
+}
+
+.col-total {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: var(--surface-sunken) !important;
+  border-left: var(--border-width-default) solid var(--border-default) !important;
+  font-weight: var(--weight-bold);
+  text-align: right !important;
+  min-width: 72px;
+}
+
+table.grid thead th.col-total {
+  z-index: 5;
+}
+
+.class-header-row td {
+  background: var(--color-primary-subtle) !important;
+  color: var(--color-primary-text);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  position: sticky;
+  left: 0;
+}
+
+.cell-uncertain {
+  background: var(--cell-lowconf-bg) !important;
+  box-shadow: inset 0 0 0 2px var(--cell-lowconf-border);
+}
+
+.cell-edited {
+  background: var(--cell-edited-bg) !important;
+  box-shadow: inset 3px 0 0 0 var(--cell-edited-marker);
+}
+
+.korean-cell,
+.col-korean {
+  font-family: var(--font-korean-ui);
+  color: var(--text-secondary);
+  min-width: var(--table-korean-col-w);
+}
+
+/* -------------------------------------------------- in-cell mini controls */
+
+.att-toggle {
+  appearance: none;
+  width: 34px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  border: var(--border-width-default) solid var(--status-absent-border);
+  background: var(--status-absent-bg);
+  color: var(--status-absent-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.att-toggle[data-here="true"] {
+  background: var(--status-here-fill);
+  border-color: var(--status-here-fill);
+  color: var(--status-here-on-fill);
+}
+
+.qt-input {
+  width: 42px;
+  height: 30px;
+  padding: 0 var(--space-1);
+  text-align: center;
+  border: var(--border-width-default) solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+}
+.qt-input::-webkit-outer-spin-button,
+.qt-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.name-input {
+  width: 100%;
+  min-width: 130px;
+  height: 30px;
+  padding: 0 var(--space-2);
+  border: var(--border-width-default) solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.name-input:hover,
+.name-input:focus {
+  background: var(--input-bg);
+  border-color: var(--border-strong);
+}
+
+/* =================================================================== login */
+
+.login-shell {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+}
+
+.login-card {
+  width: 100%;
+  max-width: var(--layout-login-max);
+  background: var(--surface-card);
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-7) var(--space-6);
+}
+
+.login-mark {
+  text-align: center;
+  margin-bottom: var(--space-6);
+}
+.login-mark h1 {
+  font-size: var(--text-2xl);
+}
+.login-mark p {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin-top: var(--space-2);
+}
+
+/* =================================================================== stamp */
+
+.stamp {
+  width: var(--stamp-size);
+  height: var(--stamp-size);
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 3px double var(--stamp-ring-outer);
+  outline: 1px solid var(--stamp-ring-inner);
+  outline-offset: 3px;
+  color: var(--color-accent-text);
+  text-align: center;
+  transform: rotate(-6deg);
+  background: var(--color-accent-subtle);
+}
+
+.stamp b {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.stamp small {
+  display: block;
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+/* =================================================================== cards */
+
+.card-sheet {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--space-4);
+}
+
+.point-card {
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  padding: var(--space-4);
+  break-inside: avoid;
+}
+
+.point-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  /* A flex item defaults to min-width:auto, so an unbreakable name refuses to
+     shrink and shoves the stamp out of the card and onto its neighbour. */
+  min-width: 0;
+  padding-bottom: var(--space-3);
+  border-bottom: var(--border-width-rule) solid var(--color-accent-strong);
+  margin-bottom: var(--space-3);
+}
+
+.point-card header > div:first-child {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.point-card h3 {
+  font-size: var(--text-lg);
+  line-height: var(--leading-snug);
+  overflow-wrap: anywhere;
+}
+
+.point-card .kr,
+.point-card .cls {
+  overflow-wrap: anywhere;
+}
+
+.point-card .kr {
+  font-family: var(--font-korean-display);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.point-card .cls {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  margin-top: var(--space-1);
+}
+
+.week-list {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.week-list dt {
+  color: var(--text-secondary);
+}
+.week-list .att {
+  text-align: center;
+  color: var(--text-muted);
+}
+.week-list .pg {
+  text-align: right;
+  font-weight: var(--weight-semibold);
+}
+
+.point-card footer {
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: var(--border-width-hairline) solid var(--border-subtle);
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ================================================================== upload */
+
+.dropzone {
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-sunken);
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  cursor: pointer;
+}
+.dropzone:hover {
+  border-color: var(--color-primary);
+  background: var(--surface-selected);
+}
+
+.preview-img {
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: var(--radius-md);
+  border: var(--border-width-default) solid var(--border-default);
+  display: block;
+  margin: 0 auto;
+}
+
+.week-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.week-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  min-height: var(--touch-target-min);
+  border: var(--border-width-default) solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+.week-chip[data-on="true"] {
+  background: var(--color-primary-subtle);
+  border-color: var(--color-primary);
+  color: var(--color-primary-text);
+  font-weight: var(--weight-semibold);
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ================================================================== mobile */
+
+@media (max-width: 640px) {
+  .main {
+    padding: var(--space-4) var(--space-3) var(--space-10);
+  }
+  h1 {
+    font-size: var(--text-2xl);
+  }
+  .card {
+    padding: var(--space-4);
+  }
+
+  /* The header has to hold four nav items plus the account controls. On a
+     phone that does not fit on one line, and a single-line overflow scroll
+     hides destinations behind an invisible edge — so it wraps instead and
+     every link stays visible. */
+  .app-header {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+  .brand {
+    font-size: var(--text-base);
+  }
+  .app-nav {
+    order: 3;
+    flex-basis: 100%;
+    justify-content: space-between;
+    overflow-x: visible;
+  }
+  .app-nav a {
+    padding: var(--space-2) var(--space-2);
+    font-size: var(--text-xs);
+  }
+  table.grid th,
+  table.grid td {
+    height: var(--table-row-h-touch);
+    scroll-margin-inline-start: 116px;
+  }
+  /* A narrower identity column leaves room for at least one full week pair
+     alongside it on a phone. */
+  .col-name {
+    width: 112px;
+    min-width: 112px;
+    max-width: 112px;
+    padding-left: var(--space-2);
+    padding-right: var(--space-2);
+  }
+  .col-korean {
+    left: 112px;
+    width: 76px;
+    min-width: 76px;
+    max-width: 76px;
+    padding-left: var(--space-2);
+    padding-right: var(--space-2);
+  }
+  .table-wrap {
+    scroll-padding-inline: 188px 88px;
+  }
+  /* These are the primary controls for crossing 17 weeks on a phone, so they
+     get a full touch target. */
+  .week-nav .btn {
+    min-height: var(--touch-target-min);
+    min-width: var(--touch-target-min);
+    padding-inline: var(--space-4);
+  }
+  .card-sheet {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================== week view */
+
+/* One week at a time, for phones. A 17-week grid cannot be read on a 375px
+   screen no matter how the columns are tuned, so the narrow layout drops the
+   horizontal axis entirely rather than shrinking it into uselessness. */
+
+.view-switch {
+  display: inline-flex;
+  border: var(--border-width-default) solid var(--border-strong);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.view-switch button {
+  appearance: none;
+  border: 0;
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  padding: var(--space-2) var(--space-4);
+  min-height: var(--touch-target-min);
+  cursor: pointer;
+}
+
+.view-switch button[aria-pressed="true"] {
+  background: var(--color-primary);
+  color: var(--text-on-primary);
+}
+
+.week-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.week-nav strong {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-variant-numeric: tabular-nums;
+}
+
+.week-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.week-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--surface-card);
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.week-row .names {
+  min-width: 0;
+}
+
+.week-row .en {
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.week-row .kr {
+  font-family: var(--font-korean-ui);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.week-row .att-toggle {
+  width: 48px;
+  height: 44px;
+  font-size: var(--text-base);
+}
+
+.week-row .qt-input {
+  width: 60px;
+  height: 44px;
+  font-size: var(--text-base);
+}
+
+.week-row .class-tag {
+  grid-column: 1 / -1;
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-primary-text);
+}
+
+/* =================================================================== print */
+
+@media print {
+  .app-header,
+  .no-print,
+  .page-head {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+  }
+
+  .main {
+    max-width: none;
+    padding: 0;
+  }
+
+  .card-sheet {
+    display: block;
+    columns: 2;
+    column-gap: 12mm;
+  }
+
+  .point-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    border: 1px dashed #999;
+    border-radius: 0;
+    box-shadow: none;
+    background: #fff;
+    padding: 6mm;
+    margin: 0 0 8mm;
+  }
+
+  .stamp {
+    background: #fff;
+    border-color: #6F4E15;
+    color: #4C350F;
+  }
+
+  @page {
+    size: letter;
+    margin: 12mm;
+  }
+}
+
+/* A date column this class already has data for. Ticking it means overwriting
+   stored history, so it is marked in the picker as well as in the banner. */
+.week-chip[data-logged="true"] {
+  border-style: dashed;
+  border-color: var(--status-warning-border);
+}
+
+.week-chip .chip-flag {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--status-warning-bg);
+  color: var(--status-warning-text);
+  white-space: nowrap;
+}
+
+/* Week header with its delete control. The control stays quiet until the
+   header is hovered or it is focused, so the grid does not read as a row of
+   delete buttons. */
+.week-head {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.week-del {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.week-group:hover .week-del,
+.week-del:focus-visible {
+  opacity: 1;
+}
+
+.week-del:hover {
+  background: var(--status-danger-bg);
+  color: var(--status-danger-text);
+}
+
+
+/* The editable name fields must not spill out of their pinned cells.
+   `.name-input` carries a min-width for the review table, where cells are
+   wide; in Records the Korean column is only 108px, so without this the input
+   overhung the first week and swallowed taps meant for its attendance
+   toggle. */
+.col-name,
+.col-korean {
+  overflow: hidden;
+}
+
+.col-name .name-input,
+.col-korean .name-input {
+  min-width: 0;
+  width: 100%;
+}
+
+/* ============================================================ roles + demo */
+
+/* Marks the pastor's account, which can delete things the volunteer cannot. */
+.role-pill {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-subtle);
+  border: var(--border-width-hairline) solid var(--color-primary-subtle-border);
+  color: var(--color-primary-text);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+/* Sits above everything in the demo, so a visitor is never in doubt that the
+   names on screen are invented. */
+.demo-banner {
+  position: sticky;
+  top: 0;
+  z-index: calc(var(--z-header) + 1);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-accent-subtle);
+  border-bottom: var(--border-width-default) solid var(--color-accent-strong);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.demo-banner .btn {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 640px) {
+  .demo-banner {
+    font-size: var(--text-xs);
+    padding: var(--space-2) var(--space-3);
+  }
+}

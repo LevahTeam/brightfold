@@ -1,0 +1,42 @@
+# QT Passport — the PUBLIC DEMO only.
+#
+# The real app is not deployed. It runs on one church computer; see
+# RUNNING-IT.md. That is deliberate: the real records hold children's names,
+# and keeping them off a hosted service was the point.
+#
+# This config exists so `fly deploy` can only ever publish the demo, which
+# contains nothing but invented names. If you find yourself editing this file
+# to deploy the real app, stop and read RUNNING-IT.md first.
+
+app = "brightfold"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # The switch that makes this a demo: no sign-in, invented data, and a
+  # separate throwaway database per visitor.
+  DEMO_MODE = "1"
+  # Visitor databases are written to /data/demo/ beside this path. They are
+  # sample data and are swept automatically, so losing them costs nothing.
+  QT_DB_PATH = "/data/qt-passport.db"
+  PORT = "3000"
+
+[mounts]
+  source = "qtp_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_start_machines = true
+  # A demo may sleep. A visitor's first click wakes it in a few seconds, and an
+  # idle demo costs nothing.
+  auto_stop_machines = "suspend"
+  min_machines_running = 0
+  max_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

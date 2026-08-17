@@ -1,0 +1,565 @@
+/* ============================================================================
+   QT PASSPORT — Design Tokens
+   Raw CSS custom properties. No framework, no build step.
+   Load once, before any component CSS:  <link rel="stylesheet" href="/design/tokens.css">
+
+   Layers in this file:
+     1. Primitive ramps      (--parchment-*, --moss-*, --gold-*, --ink-*, --brick-*, --amber-*, --walnut-*)
+     2. Typography           (families, sizes, leading, weights, tracking, features)
+     3. Space / radii / shadow / border / motion / layout / z-index
+     4. Semantic aliases     (--surface-*, --text-*, --border-*, --status-*, ...)
+     5. Dark mode overrides  (@media prefers-color-scheme: dark) — SEMANTIC LAYER ONLY
+     6. Reduced motion
+     7. Print                (forces the light semantic layer + ink-economical values)
+
+   RULE FOR IMPLEMENTERS: components consume ONLY the semantic aliases in layer 4.
+   Never reference a primitive ramp directly in component CSS, or dark mode breaks.
+   ========================================================================= */
+
+:root {
+  color-scheme: light dark;
+
+  /* ==========================================================================
+     1. PRIMITIVE RAMPS
+     ====================================================================== */
+
+  /* --- Parchment: paper, surfaces, page ground --------------------------- */
+  --parchment-50:  #FDFBF6;  /* card / raised paper                          */
+  --parchment-100: #F8F3E7;  /* page ground                                  */
+  --parchment-200: #F1E9D6;  /* sunken / table header / zebra stripe         */
+  --parchment-300: #E7DCC2;  /* inset wells, disabled fills                  */
+  --parchment-400: #D8C9A8;  /* decorative hairlines                         */
+  --parchment-500: #C4B189;  /* heavier decorative rule                      */
+
+  /* --- Moss: primary brand green ---------------------------------------- */
+  --moss-50:  #F0F4EC;
+  --moss-100: #DEE7D6;
+  --moss-200: #BFCFB0;
+  --moss-300: #97AE83;
+  --moss-400: #6F8A5B;
+  --moss-500: #55703F;  /* primary action                                     */
+  --moss-600: #445A33;  /* primary hover / text-on-parchment                  */
+  --moss-700: #35471F;  /* primary active / deep text                         */
+  --moss-800: #24301A;
+  --moss-900: #16200F;
+
+  /* --- Gold: ceremonial accent, stamps, seals ---------------------------- */
+  --gold-50:  #FDF6E3;
+  --gold-100: #F8E9C2;
+  --gold-200: #F0D492;
+  --gold-300: #E3BC63;
+  --gold-400: #D0A23C;
+  --gold-500: #B4862A;  /* metallic mid — DECORATIVE / non-text only          */
+  --gold-600: #8A6217;  /* accent TEXT (AA on parchment)                      */
+  --gold-700: #6F4E15;
+  --gold-800: #4C350F;
+  --gold-900: #2E2009;
+
+  /* --- Ink: warm near-black text ramp ------------------------------------ */
+  --ink-950: #12100C;
+  --ink-900: #201B14;  /* primary text                                        */
+  --ink-800: #3A3128;
+  --ink-700: #55493C;  /* secondary text                                      */
+  --ink-600: #6E6153;  /* muted text — lowest value still AA for body copy    */
+  --ink-500: #8A7C6C;  /* NON-TEXT ONLY (icons, ≥24px display text)           */
+  --ink-400: #A99C8B;  /* decorative rules only                               */
+
+  /* --- Brick: danger / destructive --------------------------------------- */
+  --brick-50:  #FBEBE6;
+  --brick-100: #F5D3C9;
+  --brick-500: #A3341F;  /* danger fill                                       */
+  --brick-600: #8C2B19;  /* danger text / hover                               */
+  --brick-700: #6E2112;
+
+  /* --- Amber: warning / low-confidence OCR -------------------------------- */
+  --amber-50:  #FBEFD2;
+  --amber-100: #F5E0AE;
+  --amber-500: #C8890F;
+  --amber-600: #A66E0D;
+  --amber-700: #8A5A0B;  /* warning text (AA on parchment and on amber-50)    */
+
+  /* --- Walnut: dark-mode ground (used only by the dark block) ------------- */
+  --walnut-950: #12100C;
+  --walnut-900: #17140F;  /* dark page ground                                 */
+  --walnut-800: #201C16;  /* dark card                                        */
+  --walnut-700: #2A241C;  /* dark raised / table header                       */
+  --walnut-600: #3F372C;  /* dark subtle border                               */
+  --walnut-500: #7A6B57;  /* dark strong border (3:1 vs surfaces)             */
+  --walnut-cream:    #F0E9DA;  /* dark primary text                           */
+  --walnut-cream-2:  #C6BBA6;  /* dark secondary text                         */
+  --walnut-cream-3:  #A69B87;  /* dark muted text                             */
+
+  /* ==========================================================================
+     2. TYPOGRAPHY
+     ====================================================================== */
+
+  /* Web fonts (Google Fonts, self-host in production):
+     Lora        — 400,500,600,700 + 400i   (display serif)
+     Inter       — 400,500,600,700          (UI / data sans)
+     Noto Sans KR— 400,500,700              (Hangul, subset to used glyphs)
+     Noto Serif KR — 400,600                (Hangul on printed cards only)
+     Latin faces are listed first in every stack so Hangul falls through
+     to a Korean face while Latin stays on brand. */
+
+  --font-display: 'Lora', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia,
+                  'Noto Serif KR', 'Apple SD Gothic Neo', 'Times New Roman', serif;
+  --font-ui:      'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+                  'Helvetica Neue', 'Noto Sans KR', 'Apple SD Gothic Neo',
+                  'Malgun Gothic', Arial, sans-serif;
+  --font-mono:    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
+                  'Liberation Mono', monospace;
+  /* Explicit Hangul stacks for name fields where the Korean face must lead. */
+  --font-korean-ui:      'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --font-korean-display: 'Noto Serif KR', 'Apple SD Gothic Neo', 'Nanum Myeongjo', serif;
+
+  /* Font feature sets — apply via font-feature-settings / font-variant-numeric */
+  --numeric-tabular:      'tnum' 1, 'lnum' 1;   /* all tables, steppers, totals */
+  --numeric-proportional: 'pnum' 1, 'lnum' 1;   /* prose                        */
+  --display-features:     'liga' 1, 'kern' 1;
+  --smallcaps-features:   'kern' 1;             /* Lora has no true smallcaps;
+                                                   fake with uppercase+tracking */
+
+  /* --- Type scale (rem, 16px root) --------------------------------------- */
+  --text-2xs:  0.6875rem;  /* 11px — stamp micro-labels, cut-guide legends    */
+  --text-xs:   0.75rem;    /* 12px — table column headers, meta, badges       */
+  --text-sm:   0.875rem;   /* 14px — dense table body, secondary UI           */
+  --text-base: 1rem;       /* 16px — body, inputs (never smaller on mobile)   */
+  --text-lg:   1.125rem;   /* 18px — lead paragraph, card titles              */
+  --text-xl:   1.375rem;   /* 22px — section headings (h3)                    */
+  --text-2xl:  1.75rem;    /* 28px — page headings (h2)                       */
+  --text-3xl:  2.125rem;   /* 34px — screen title (h1)                        */
+  --text-4xl:  2.75rem;    /* 44px — login wordmark, stamp numerals           */
+
+  --leading-none:  1;
+  --leading-tight: 1.15;   /* --text-3xl / --text-4xl                         */
+  --leading-snug:  1.25;   /* --text-2xl                                      */
+  --leading-heading: 1.35; /* --text-xl                                       */
+  --leading-normal: 1.5;   /* UI, table rows                                  */
+  --leading-relaxed: 1.6;  /* body prose                                      */
+
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  --tracking-tight:  -0.011em;  /* --text-3xl / --text-4xl display            */
+  --tracking-normal: 0;
+  --tracking-wide:   0.04em;    /* small caps labels                          */
+  --tracking-wider:  0.14em;    /* stamp arcs, "QT PASSPORT" wordmark         */
+
+  /* ==========================================================================
+     3. SPACE · RADII · SHADOW · BORDER · MOTION · LAYOUT
+     ====================================================================== */
+
+  /* 4px base unit */
+  --space-0:  0;
+  --space-1:  0.25rem;  /*  4px */
+  --space-2:  0.5rem;   /*  8px */
+  --space-3:  0.75rem;  /* 12px */
+  --space-4:  1rem;     /* 16px */
+  --space-5:  1.25rem;  /* 20px */
+  --space-6:  1.5rem;   /* 24px */
+  --space-8:  2rem;     /* 32px */
+  --space-10: 2.5rem;   /* 40px */
+  --space-12: 3rem;     /* 48px */
+  --space-16: 4rem;     /* 64px */
+  --space-20: 5rem;     /* 80px */
+  --space-24: 6rem;     /* 96px */
+
+  --radius-xs:   2px;   /* table cell edit outline                            */
+  --radius-sm:   4px;   /* checkbox, chip                                     */
+  --radius-md:   6px;   /* input, select, button                              */
+  --radius-lg:   8px;   /* card, toast                                        */
+  --radius-xl:  12px;   /* modal, photo dropzone                              */
+  --radius-2xl: 16px;   /* hero / login panel                                 */
+  --radius-pill: 999px; /* segmented toggle, badge                            */
+  --radius-round: 50%;  /* passport stamp                                     */
+
+  /* Paper shadows: warm, low-alpha, tight. No blue-grey material elevation. */
+  --shadow-none:    none;
+  --shadow-hairline: 0 0 0 1px rgba(58, 45, 26, 0.08);
+  --shadow-raised:  0 1px 1px rgba(58, 45, 26, 0.05),
+                    0 1px 3px rgba(58, 45, 26, 0.06);
+  --shadow-card:    0 1px 2px rgba(58, 45, 26, 0.06),
+                    0 6px 14px -10px rgba(58, 45, 26, 0.18);
+  --shadow-popover: 0 2px 4px rgba(58, 45, 26, 0.08),
+                    0 14px 28px -14px rgba(58, 45, 26, 0.22);
+  --shadow-modal:   0 4px 8px rgba(58, 45, 26, 0.10),
+                    0 28px 56px -24px rgba(58, 45, 26, 0.30);
+  --shadow-inset:   inset 0 1px 2px rgba(58, 45, 26, 0.07);
+  /* Sticky column edge — replaces a hard border while scrolling */
+  --shadow-sticky-x: 6px 0 8px -8px rgba(58, 45, 26, 0.28);
+  --shadow-sticky-y: 0 6px 8px -8px rgba(58, 45, 26, 0.28);
+
+  --border-width-hairline: 1px;
+  --border-width-default:  1px;
+  --border-width-thick:    2px;  /* stamp outer ring, selected states         */
+  --border-width-rule:     3px;  /* card top rule / active nav marker         */
+
+  --duration-instant: 80ms;
+  --duration-fast:    140ms;
+  --duration-normal:  220ms;
+  --duration-slow:    360ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0.2, 1);
+  --ease-out:      cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out:   cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* Layout */
+  --layout-header-h:      56px;  /* mobile   */
+  --layout-header-h-lg:   64px;  /* ≥768px   */
+  --layout-content-max:   1120px;
+  --layout-prose-max:     68ch;
+  --layout-login-max:     420px;
+  --touch-target-min:     44px;  /* WCAG 2.5.8 floor                          */
+  --touch-target-primary: 48px;  /* thumb-first primary actions               */
+  --touch-gap-min:        8px;   /* min gap between adjacent targets          */
+  --table-name-col-w:     148px; /* Records: sticky English-name column       */
+  --table-korean-col-w:   108px; /* Records: sticky Korean-name column        */
+  --table-att-col-w:      44px;  /* Records: Attendance cell                  */
+  --table-qt-col-w:       56px;  /* Records: QT pages cell                    */
+  --table-row-h:          40px;  /* desktop dense row                         */
+  --table-row-h-touch:    44px;  /* mobile / edit mode row                    */
+
+  --z-base:     0;
+  --z-sticky:   100;   /* sticky table header/columns                         */
+  --z-header:   200;   /* app header                                          */
+  --z-dropdown: 300;
+  --z-overlay:  400;   /* modal scrim                                         */
+  --z-modal:    410;
+  --z-toast:    500;
+  --z-tooltip:  600;
+
+  /* ==========================================================================
+     4. SEMANTIC ALIASES  ← components use only these
+     ====================================================================== */
+
+  /* --- Surfaces ---------------------------------------------------------- */
+  --surface-page:      var(--parchment-100);
+  --surface-card:      var(--parchment-50);
+  --surface-sunken:    var(--parchment-200);  /* table header, page well      */
+  --surface-inset:     var(--parchment-300);  /* stepper track, disabled fill */
+  --surface-stripe:    var(--parchment-200);  /* zebra row (use 50% opacity)  */
+  --surface-hover:     rgba(85, 112, 63, 0.06);
+  --surface-active:    rgba(85, 112, 63, 0.12);
+  --surface-selected:  var(--moss-50);
+  --surface-overlay:   rgba(32, 27, 20, 0.52); /* modal scrim                 */
+  --surface-skeleton:  var(--parchment-300);
+  --surface-skeleton-sheen: rgba(253, 251, 246, 0.72);
+  --surface-inverse:   #2B2A20;                /* toast body                  */
+
+  /* --- Text -------------------------------------------------------------- */
+  --text-primary:    var(--ink-900);
+  --text-secondary:  var(--ink-700);
+  --text-muted:      var(--ink-600);   /* smallest AA-safe body value         */
+  --text-disabled:   var(--ink-500);   /* non-essential / ≥24px only          */
+  --text-inverse:    var(--parchment-50);
+  --text-on-primary: #FFFFFF;          /* on --color-primary                  */
+  --text-on-accent:  var(--ink-900);   /* on gold fills — never white         */
+  --text-link:       var(--moss-600);
+  --text-link-hover: var(--moss-700);
+  --text-accent:     var(--gold-600);
+
+  /* --- Borders ----------------------------------------------------------- */
+  --border-subtle:  var(--parchment-400);  /* decorative rules, table gridlines */
+  --border-default: var(--parchment-500);  /* card edges                        */
+  --border-strong:  #8F7C55;               /* inputs, controls — ≥3:1 non-text  */
+  --border-focus:   var(--moss-600);
+  --border-accent:  var(--gold-500);       /* stamp rings, ceremonial rules     */
+
+  /* --- Primary (moss) ---------------------------------------------------- */
+  --color-primary:          var(--moss-500);
+  --color-primary-hover:    var(--moss-600);
+  --color-primary-active:   var(--moss-700);
+  --color-primary-subtle:   var(--moss-50);
+  --color-primary-subtle-border: var(--moss-200);
+  --color-primary-text:     var(--moss-600);
+
+  /* --- Accent (gold) ----------------------------------------------------- */
+  --color-accent:        var(--gold-300);   /* fills — pair with --text-on-accent */
+  --color-accent-hover:  var(--gold-400);
+  --color-accent-strong: var(--gold-500);   /* rules, rings, seals               */
+  --color-accent-subtle: var(--gold-50);
+  --color-accent-text:   var(--gold-600);
+
+  /* --- Status: Here / Absent (attendance) -------------------------------- */
+  --status-here-bg:     var(--moss-100);
+  --status-here-border: var(--moss-400);
+  --status-here-text:   var(--moss-700);
+  --status-here-fill:   var(--moss-500);   /* selected segment fill            */
+  --status-here-on-fill: #FFFFFF;
+
+  --status-absent-bg:     var(--parchment-300);
+  --status-absent-border: var(--border-strong);
+  --status-absent-text:   var(--ink-700);
+  --status-absent-fill:   var(--ink-600);
+  --status-absent-on-fill: var(--parchment-50);
+
+  /* --- Status: success / warning / danger / info ------------------------- */
+  --status-success-bg:     var(--moss-50);
+  --status-success-border: var(--moss-400);
+  --status-success-text:   var(--moss-700);
+  --status-success-fill:   var(--moss-500);
+
+  --status-warning-bg:     var(--amber-50);
+  --status-warning-border: var(--amber-500);
+  --status-warning-text:   var(--amber-700);
+  --status-warning-fill:   var(--amber-600);
+
+  --status-danger-bg:     var(--brick-50);
+  --status-danger-border: var(--brick-500);
+  --status-danger-text:   var(--brick-600);
+  --status-danger-fill:   var(--brick-500);
+  --status-danger-hover:  var(--brick-600);
+  --status-danger-active: var(--brick-700);
+  --status-danger-on-fill: #FFFFFF;
+
+  --status-info-bg:     var(--parchment-200);
+  --status-info-border: var(--border-strong);
+  --status-info-text:   var(--ink-700);
+
+  /* --- Data-review cell states (OCR review table) ------------------------ */
+  --cell-edited-bg:        var(--moss-50);
+  --cell-edited-marker:    var(--moss-500);   /* 3px inline-start bar          */
+  --cell-lowconf-bg:       var(--amber-50);
+  --cell-lowconf-border:   var(--amber-500);  /* 2px dashed                    */
+  --cell-lowconf-text:     var(--amber-700);
+  --cell-error-bg:         var(--brick-50);
+  --cell-error-border:     var(--brick-500);
+  --cell-readonly-bg:      var(--parchment-200);
+
+  /* --- Focus ring -------------------------------------------------------- */
+  --focus-ring-color:  #2A5E3D;   /* 6.85:1 vs page ground                    */
+  --focus-ring-width:  2px;
+  --focus-ring-offset: 2px;
+  --focus-ring-offset-color: var(--surface-card);
+  --focus-ring-halo:   0 0 0 4px rgba(85, 112, 63, 0.18);
+
+  /* --- Component sizing -------------------------------------------------- */
+  --control-h-sm: 36px;
+  --control-h-md: 44px;   /* default — meets touch minimum                    */
+  --control-h-lg: 48px;
+  --control-pad-x: var(--space-4);
+  --input-bg:            var(--parchment-50);
+  --input-bg-disabled:   var(--parchment-300);
+  --input-placeholder:   var(--ink-600);
+  --stamp-size:      88px;   /* screen passport stamp                          */
+  --stamp-size-sm:   56px;   /* inline / list stamp                            */
+  --stamp-ring-outer: var(--gold-500);
+  --stamp-ring-inner: var(--gold-400);
+  --stamp-ink:        var(--moss-700);
+  --stamp-bg:         var(--gold-50);
+
+  /* ==========================================================================
+     PRINT-ONLY VALUES (consumed by the print stylesheet; see DESIGN_SYSTEM.md)
+     ====================================================================== */
+  --print-page-margin:   0.375in;
+  --print-card-w:        3.75in;
+  --print-card-h:        3.2in;   /* standard: 2 cols × 3 rows = 6 per sheet   */
+  --print-card-h-compact: 2.4in;  /* compact:  2 cols × 4 rows = 8 per sheet   */
+  --print-gutter-x:      0.25in;
+  --print-gutter-y:      0.2in;
+  --print-card-pad:      0.22in;
+  --print-hairline:      0.5pt;
+  --print-rule:          1pt;
+  --print-ink:           #1A1A1A;  /* pure-ish black for body text             */
+  --print-ink-soft:      #55493C;
+  --print-ink-faint:     #8A7C6C;
+  --print-accent:        #6F4E15;  /* gold, darkened for laser/inkjet          */
+  --print-moss:          #35471F;
+  --print-guide:         #B3B3B3;  /* crop marks / cut lines                   */
+  --print-stamp-size:    0.95in;
+}
+
+/* ============================================================================
+   5. DARK MODE — semantic layer only
+   The app UI supports dark mode. Printed cards never do (see @media print).
+   ========================================================================= */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-page:     var(--walnut-900);
+    --surface-card:     var(--walnut-800);
+    --surface-sunken:   var(--walnut-700);
+    --surface-inset:    var(--walnut-700);
+    --surface-stripe:   var(--walnut-700);
+    --surface-hover:    rgba(168, 194, 147, 0.08);
+    --surface-active:   rgba(168, 194, 147, 0.16);
+    --surface-selected: #26301F;
+    --surface-overlay:  rgba(10, 8, 6, 0.66);
+    --surface-skeleton: #2E2820;
+    --surface-skeleton-sheen: rgba(240, 233, 218, 0.06);
+    --surface-inverse:  var(--parchment-100);
+
+    --text-primary:    var(--walnut-cream);
+    --text-secondary:  var(--walnut-cream-2);
+    --text-muted:      var(--walnut-cream-3);
+    --text-disabled:   #7E7360;
+    --text-inverse:    var(--ink-900);
+    --text-on-primary: var(--ink-950);          /* dark ink on light moss fill */
+    --text-on-accent:  var(--ink-950);
+    --text-link:       #A8C293;
+    --text-link-hover: #C1D8AC;
+    --text-accent:     var(--gold-300);
+
+    --border-subtle:  var(--walnut-600);
+    --border-default: #4A4034;
+    --border-strong:  var(--walnut-500);
+    --border-focus:   #A8C293;
+    --border-accent:  var(--gold-400);
+
+    --color-primary:        #8FAF77;
+    --color-primary-hover:  #A8C293;
+    --color-primary-active: #C1D8AC;
+    --color-primary-subtle: #26301F;
+    --color-primary-subtle-border: #47603A;
+    --color-primary-text:   #A8C293;
+
+    --color-accent:        var(--gold-300);
+    --color-accent-hover:  var(--gold-200);
+    --color-accent-strong: var(--gold-400);
+    --color-accent-subtle: #33290F;
+    --color-accent-text:   var(--gold-300);
+
+    --status-here-bg:      #26301F;
+    --status-here-border:  #6F8A5B;
+    --status-here-text:    #A8C293;
+    --status-here-fill:    #8FAF77;
+    --status-here-on-fill: var(--ink-950);
+
+    --status-absent-bg:      var(--walnut-700);
+    --status-absent-border:  var(--walnut-500);
+    --status-absent-text:    var(--walnut-cream-2);
+    --status-absent-fill:    #6B5E4C;
+    --status-absent-on-fill: var(--walnut-cream);
+
+    --status-success-bg:     #26301F;
+    --status-success-border: #6F8A5B;
+    --status-success-text:   #A8C293;
+    --status-success-fill:   #8FAF77;
+
+    --status-warning-bg:     #33290F;
+    --status-warning-border: var(--gold-400);
+    --status-warning-text:   #E5B96A;
+    --status-warning-fill:   var(--gold-400);
+
+    --status-danger-bg:      #35180F;
+    --status-danger-border:  #C4573A;
+    --status-danger-text:    #F0937B;
+    --status-danger-fill:    #B33F27;
+    --status-danger-hover:   #C4573A;
+    --status-danger-active:  #D66B4E;
+    --status-danger-on-fill: #FFFFFF;
+
+    --status-info-bg:     var(--walnut-700);
+    --status-info-border: var(--walnut-500);
+    --status-info-text:   var(--walnut-cream-2);
+
+    --cell-edited-bg:      #26301F;
+    --cell-edited-marker:  #8FAF77;
+    --cell-lowconf-bg:     #33290F;
+    --cell-lowconf-border: var(--gold-400);
+    --cell-lowconf-text:   #E5B96A;
+    --cell-error-bg:       #35180F;
+    --cell-error-border:   #C4573A;
+    --cell-readonly-bg:    var(--walnut-700);
+
+    --focus-ring-color:  #D8B25A;    /* 9.1:1 vs dark ground                   */
+    --focus-ring-offset-color: var(--surface-card);
+    --focus-ring-halo:   0 0 0 4px rgba(216, 178, 90, 0.24);
+
+    --input-bg:          var(--walnut-800);
+    --input-bg-disabled: var(--walnut-700);
+    --input-placeholder: var(--walnut-cream-3);
+
+    --stamp-ring-outer: var(--gold-400);
+    --stamp-ring-inner: var(--gold-500);
+    --stamp-ink:        var(--gold-200);
+    --stamp-bg:         #2A2113;
+
+    /* Paper shadows read as noise on dark ground — flatten and rely on borders */
+    --shadow-hairline: 0 0 0 1px rgba(0, 0, 0, 0.5);
+    --shadow-raised:   0 1px 2px rgba(0, 0, 0, 0.45);
+    --shadow-card:     0 1px 2px rgba(0, 0, 0, 0.45), 0 6px 14px -10px rgba(0, 0, 0, 0.6);
+    --shadow-popover:  0 2px 6px rgba(0, 0, 0, 0.5), 0 14px 28px -14px rgba(0, 0, 0, 0.7);
+    --shadow-modal:    0 4px 10px rgba(0, 0, 0, 0.55), 0 28px 56px -24px rgba(0, 0, 0, 0.8);
+    --shadow-inset:    inset 0 1px 2px rgba(0, 0, 0, 0.45);
+    --shadow-sticky-x: 6px 0 10px -8px rgba(0, 0, 0, 0.7);
+    --shadow-sticky-y: 0 6px 10px -8px rgba(0, 0, 0, 0.7);
+  }
+}
+
+/* ============================================================================
+   6. REDUCED MOTION — collapse durations at the token level so every
+   component that animates via --duration-* inherits the preference.
+   Components must still disable transform-based effects explicitly.
+   ========================================================================= */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-instant: 0.01ms;
+    --duration-fast:    0.01ms;
+    --duration-normal:  0.01ms;
+    --duration-slow:    0.01ms;
+  }
+}
+
+/* ============================================================================
+   7. PRINT — printed point cards. Light only, ink-economical, no chrome.
+   Re-declares the light semantic layer so a dark-mode browser still prints
+   black-on-white, and neutralises every shadow.
+   ========================================================================= */
+@media print {
+  :root {
+    color-scheme: light;
+
+    --surface-page:     #FFFFFF;
+    --surface-card:     #FFFFFF;
+    --surface-sunken:   #FFFFFF;
+    --surface-inset:    #FFFFFF;
+    --surface-stripe:   #FFFFFF;
+    --surface-selected: #FFFFFF;
+    --surface-skeleton: #FFFFFF;
+
+    --text-primary:   var(--print-ink);
+    --text-secondary: var(--print-ink-soft);
+    --text-muted:     var(--print-ink-soft);
+    --text-accent:    var(--print-accent);
+    --text-on-accent: var(--print-ink);
+    --text-link:      var(--print-ink);
+
+    --border-subtle:  var(--print-guide);
+    --border-default: var(--print-ink-faint);
+    --border-strong:  var(--print-ink-soft);
+    --border-accent:  var(--print-accent);
+
+    --color-primary:      var(--print-moss);
+    --color-primary-text: var(--print-moss);
+    --color-accent:       #FFFFFF;
+    --color-accent-strong: var(--print-accent);
+
+    --status-here-bg:       #FFFFFF;
+    --status-here-border:   var(--print-moss);
+    --status-here-text:     var(--print-moss);
+    --status-absent-bg:     #FFFFFF;
+    --status-absent-border: var(--print-ink-faint);
+    --status-absent-text:   var(--print-ink-faint);
+
+    --stamp-ring-outer: var(--print-accent);
+    --stamp-ring-inner: var(--print-accent);
+    --stamp-ink:        var(--print-moss);
+    --stamp-bg:         #FFFFFF;
+
+    --shadow-none: none;
+    --shadow-hairline: none;
+    --shadow-raised: none;
+    --shadow-card: none;
+    --shadow-popover: none;
+    --shadow-modal: none;
+    --shadow-inset: none;
+    --shadow-sticky-x: none;
+    --shadow-sticky-y: none;
+
+    --duration-instant: 0.01ms;
+    --duration-fast: 0.01ms;
+    --duration-normal: 0.01ms;
+    --duration-slow: 0.01ms;
+  }
+}

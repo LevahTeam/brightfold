@@ -1,0 +1,21 @@
+node_modules/
+.next/
+.next-e2e/
+out/
+build/
+data/
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.local
+.DS_Store
+next-env.d.ts
+*.tsbuildinfo
+test-results/
+playwright-report/
+tests/e2e/.auth/
+data/backups/
+
+# Real names used only by the local deploy-safety check. Never published.
+tests/real-names.local.txt
