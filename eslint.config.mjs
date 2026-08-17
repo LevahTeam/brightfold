@@ -25,6 +25,31 @@ const config = [
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
     },
   },
+  {
+    /**
+     * Type-aware rules, applied to the code that touches the database.
+     *
+     * The database is reached over the network, so every query returns a
+     * promise. A forgotten `await` still compiles and still returns 200 — the
+     * route just serialises a pending promise as `{}`, or skips a validation
+     * check entirely. Moving off a synchronous driver introduced fourteen of
+     * these at once, and the type checker saw none of them, because
+     * `NextResponse.json()` accepts anything.
+     */
+    files: ["app/**/*.ts", "app/**/*.tsx", "lib/**/*.ts", "scripts/**/*.ts"],
+    languageOptions: {
+      parserOptions: { projectService: true, tsconfigRootDir: dirname(fileURLToPath(import.meta.url)) },
+    },
+    rules: {
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/await-thenable": "error",
+      // A promise passed where a value is expected — `json({ weeks: listWeeks() })`.
+      "@typescript-eslint/no-misused-promises": [
+        "error",
+        { checksVoidReturn: false },
+      ],
+    },
+  },
 ];
 
 export default config;

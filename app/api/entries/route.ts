@@ -24,7 +24,7 @@ export const POST = withAuth(async (user, req) => {
   const qtPages = requireInt(body.qt_pages, "qt_pages");
   if (qtPages < 0) throw new ValidationError("QT pages cannot be negative.");
 
-  assertWeekMatchesKid(kidId, weekId);
-  setEntry(kidId, weekId, attendance as Attendance, qtPages, user.username);
+  await assertWeekMatchesKid(kidId, weekId);
+  await setEntry(kidId, weekId, attendance as Attendance, qtPages, user.username);
   return NextResponse.json({ ok: true });
 });

@@ -12,8 +12,8 @@ interface ClassStat {
   total_pages: number;
 }
 
-function classStats(classId: number): ClassStat {
-  return queryOne<ClassStat>(
+async function classStats(classId: number): Promise<ClassStat> {
+  return (await queryOne<ClassStat>(
     `SELECT
          (SELECT COUNT(*) FROM kids WHERE class_id = ? AND archived = 0) AS kids,
          -- Weeks this class actually has data for. Records shows every week
@@ -28,15 +28,22 @@ function classStats(classId: number): ClassStat {
     classId,
     classId,
     classId,
-  )!;
+  ))!;
 }
 
 export default async function DashboardPage() {
-  const grades = await withRequestDb(() =>
-    listGrades().map((g) => ({
-      ...g,
-      classes: listClasses(g.id).map((c) => ({ ...c, stats: classStats(c.id) })),
-    })),
+  const grades = await withRequestDb(async () =>
+    Promise.all(
+      (await listGrades()).map(async (g) => ({
+        ...g,
+        classes: await Promise.all(
+          (await listClasses(g.id)).map(async (c) => ({
+            ...c,
+            stats: await classStats(c.id),
+          })),
+        ),
+      })),
+    ),
   );
 
   return (

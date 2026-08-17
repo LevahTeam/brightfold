@@ -58,6 +58,6 @@ export const POST = withAuth(async (user, req) => {
     return { english_name: english, korean_name: korean, cells };
   });
 
-  const result = saveSheet({ classId, weekIds, rows, updatedBy: user.username });
+  const result = await saveSheet({ classId, weekIds, rows, updatedBy: user.username });
   return NextResponse.json(result);
 });

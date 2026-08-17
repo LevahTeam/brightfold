@@ -13,20 +13,28 @@ import { existsSync, rmSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { backupDatabase } from "./backup";
-import { getDb } from "../lib/db";
+import { queryOne } from "../lib/db";
 
 const DB_PATH =
   process.env.QT_DB_PATH ?? path.join(process.cwd(), "data", "qt-passport.db");
 
 const confirmed = process.argv.includes("--yes");
 
+if (process.env.TURSO_DATABASE_URL?.trim()) {
+  console.error(
+    "\nnpm run db:reset deletes the local database file, but TURSO_DATABASE_URL is\n" +
+      "set, so this project is pointed at a hosted database. Nothing was changed.\n\n" +
+      "To wipe the hosted database, use Turso directly:\n" +
+      "  turso db shell <name> \"DROP TABLE IF EXISTS entries;\"  (and so on)\n",
+  );
+  process.exit(1);
+}
+
 if (existsSync(DB_PATH)) {
-  const counts = getDb()
-    .prepare(
-      `SELECT (SELECT COUNT(*) FROM kids WHERE archived = 0) AS kids,
-              (SELECT COUNT(*) FROM entries) AS entries`,
-    )
-    .get() as unknown as { kids: number; entries: number };
+  const counts = (await queryOne<{ kids: number; entries: number }>(
+    `SELECT (SELECT COUNT(*) FROM kids WHERE archived = 0) AS kids,
+            (SELECT COUNT(*) FROM entries) AS entries`,
+  ))!;
 
   if (!confirmed) {
     console.error(
@@ -41,7 +49,7 @@ if (existsSync(DB_PATH)) {
   }
 
   if (counts.kids > 0 || counts.entries > 0) {
-    backupDatabase("pre-reset");
+    await backupDatabase("pre-reset");
   }
 }
 

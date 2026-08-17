@@ -9,6 +9,14 @@ there is no public web address.
 
 ---
 
+## Is this the right file?
+
+This file keeps the records **on one computer you own**. If you would rather
+have a normal web address that works from anywhere, and are content for the
+records to live on hosted servers, use [`VERCEL.md`](VERCEL.md) instead.
+
+---
+
 ## Which setup do you need?
 
 **Both of you only use it at church** → Setup A. Simplest, nothing to install.

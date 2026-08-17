@@ -1,9 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Database access relies on node:sqlite. Keep it on the server and out of
-  // any browser bundle.
-  serverExternalPackages: [],
+  // The libSQL client has a native binding. Leaving it external keeps the
+  // server compiler from trying to bundle it, which breaks on Vercel.
+  serverExternalPackages: ["@libsql/client"],
   // Give end-to-end runs a separate build directory. Otherwise, a test run
   // alongside `npm run dev` replaces the dev build and its chunk requests
   // begin returning 404s.

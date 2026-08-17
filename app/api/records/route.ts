@@ -9,13 +9,13 @@ export const GET = withAuth(async (_user, req) => {
   const url = new URL(req.url);
   const gradeId = requireInt(url.searchParams.get("gradeId"), "gradeId");
 
-  const grade = getGrade(gradeId);
+  const grade = await getGrade(gradeId);
   if (!grade) throw new ValidationError("That grade does not exist.");
 
   const rawClassId = url.searchParams.get("classId");
   const classId =
     rawClassId && rawClassId !== "all" ? requireInt(rawClassId, "classId") : undefined;
 
-  const { weeks, rows } = getRecords(gradeId, classId);
-  return NextResponse.json({ grade, classes: listClasses(gradeId), weeks, rows });
+  const { weeks, rows } = await getRecords(gradeId, classId);
+  return NextResponse.json({ grade, classes: await listClasses(gradeId), weeks, rows });
 });

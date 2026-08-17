@@ -13,6 +13,6 @@ type Ctx = { params: Promise<{ id: string }> };
  */
 export const GET = withAuth<Ctx>(async (_user, _req, ctx) => {
   const classId = requireInt((await ctx.params).id, "Class id");
-  if (!getClass(classId)) throw new ValidationError("That class does not exist.");
-  return NextResponse.json({ labels: getLoggedWeekLabels(classId) });
+  if (!(await getClass(classId))) throw new ValidationError("That class does not exist.");
+  return NextResponse.json({ labels: await getLoggedWeekLabels(classId) });
 });

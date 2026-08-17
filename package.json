@@ -19,6 +19,7 @@
     "serve:demo": "DEMO_MODE=1 QT_DB_PATH=./data/demo-run/qt.db next build && DEMO_MODE=1 QT_DB_PATH=./data/demo-run/qt.db next start -p 3007 -H 0.0.0.0"
   },
   "dependencies": {
+    "@libsql/client": "^0.17.4",
     "next": "15.5.4",
     "react": "19.1.1",
     "react-dom": "19.1.1"

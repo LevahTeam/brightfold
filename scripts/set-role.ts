@@ -10,7 +10,7 @@
  * that down afterwards.
  */
 
-import { getDb } from "../lib/db";
+import { execute, queryAll, queryOne } from "../lib/db";
 
 const [username, role] = process.argv.slice(2);
 
@@ -22,13 +22,13 @@ if (!username || (role !== "admin" && role !== "member")) {
   process.exit(1);
 }
 
-const db = getDb();
-const user = db.prepare("SELECT id, username, role FROM users WHERE username = ?").get(
+const user = await queryOne<{ id: number; username: string; role: string }>(
+  "SELECT id, username, role FROM users WHERE username = ?",
   username.trim(),
-) as { id: number; username: string; role: string } | undefined;
+);
 
 if (!user) {
-  const all = (db.prepare("SELECT username FROM users").all() as { username: string }[])
+  const all = (await queryAll<{ username: string }>("SELECT username FROM users"))
     .map((u) => u.username)
     .join(", ");
   console.error(`\nNo account called "${username}". Existing accounts: ${all || "(none)"}\n`);
@@ -36,10 +36,10 @@ if (!user) {
 }
 
 if (role === "member") {
-  const admins = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'").get() as {
-    n: number;
-  };
-  if (user.role === "admin" && admins.n <= 1) {
+  const admins = await queryOne<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM users WHERE role = 'admin'",
+  );
+  if (user.role === "admin" && (admins?.n ?? 0) <= 1) {
     console.error(
       "\nThat is the only admin account. Promoting someone else first avoids " +
         "leaving nobody able to delete a bad week.\n",
@@ -48,5 +48,5 @@ if (role === "member") {
   }
 }
 
-db.prepare("UPDATE users SET role = ? WHERE id = ?").run(role, user.id);
+await execute("UPDATE users SET role = ? WHERE id = ?", role, user.id);
 console.log(`\n${user.username}: ${user.role} -> ${role}\n`);

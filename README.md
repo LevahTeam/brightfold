@@ -13,10 +13,16 @@ invented, no sign-in is needed, and you get your own sample data to edit. The
 real app is not published anywhere; see
 [Privacy and deployment](#the-demo-is-the-only-thing-published) for why.
 
-> **Setting it up for real use? Read [`RUNNING-IT.md`](RUNNING-IT.md).** It
-> covers running the app on one church computer that both of you reach, with
-> the records never leaving that machine. This file covers the app itself and
-> development.
+> **Setting it up for real use?** There are two ways, and they are a genuine
+> trade-off:
+>
+> - **[`VERCEL.md`](VERCEL.md)** — a real web address that works from anywhere,
+>   with nothing running on your laptop. The records live on hosted servers.
+> - **[`RUNNING-IT.md`](RUNNING-IT.md)** — the app runs on one church computer
+>   and the records never leave it. Reachable on the church wifi, or from
+>   anywhere over a private network.
+>
+> This file covers the app itself and development.
 
 ---
 
@@ -181,9 +187,14 @@ to replace the stored values; the app asks for confirmation before proceeding.
 
 ## Where the records live
 
-Everything is one SQLite file. There is no cloud account behind it and no
-copy anywhere else, which is deliberate: the records stay on a machine you
-control.
+The app reads `TURSO_DATABASE_URL` and stores records in one of two places:
+
+| `TURSO_DATABASE_URL` | Storage |
+| --- | --- |
+| set | a hosted Turso database — required on Vercel, whose filesystem is thrown away between requests |
+| not set | one local SQLite file, on a machine you control |
+
+The rest of this section is about the local file.
 
 **The intended setup** is one church computer running the app, reached by both
 of you — over the church wifi, or over a private network for use from

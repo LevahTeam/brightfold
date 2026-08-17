@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { readdirSync, statSync, rmSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { runWithDb, getDb, closeDb } from "./db";
+import { runWithDb, execute, queryAll, closeDb } from "./db";
 import { hashPassword } from "./password";
 import type { User } from "./types";
 
@@ -71,28 +71,28 @@ export async function withRequestDb<T>(fn: () => T | Promise<T>): Promise<T> {
 
   if (!existsSync(dbPath)) {
     mkdirSync(path.dirname(dbPath), { recursive: true });
-    // Drop any stale handle from a previous copy at this path before seeding.
-    closeDb(dbPath);
-    runWithDb(dbPath, () => seedDemoData());
-    sweepOldDemos();
+    // Drop any stale connection from a previous copy at this path before seeding.
+    await closeDb(dbPath);
+    await runWithDb(dbPath, () => seedDemoData());
+    await sweepOldDemos();
   }
   return runWithDb(dbPath, fn);
 }
 
 /** Delete this visitor's database so their next request starts fresh. */
-export function resetDemo(id: string): void {
+export async function resetDemo(id: string): Promise<void> {
   if (!isValidDemoId(id)) return;
   const dbPath = demoDbPath(id);
-  // Close before deleting, or the cached handle keeps writing to the removed
-  // file and the reseed fails on rows only that handle can still see.
-  closeDb(dbPath);
+  // Close before deleting, or the cached connection keeps writing to the
+  // removed file and the reseed fails on rows only it can still see.
+  await closeDb(dbPath);
   for (const suffix of ["", "-wal", "-shm"]) {
     rmSync(`${dbPath}${suffix}`, { force: true });
   }
 }
 
 /** Remove databases from visitors who have long since left. */
-function sweepOldDemos(): void {
+async function sweepOldDemos(): Promise<void> {
   const root = demoRoot();
   if (!existsSync(root)) return;
   const cutoff = Date.now() - MAX_AGE_MS;
@@ -100,7 +100,7 @@ function sweepOldDemos(): void {
     for (const file of readdirSync(root)) {
       const full = path.join(root, file);
       if (statSync(full).mtimeMs >= cutoff) continue;
-      if (full.endsWith(".db")) closeDb(full);
+      if (full.endsWith(".db")) await closeDb(full);
       rmSync(full, { force: true });
     }
   } catch {
@@ -114,15 +114,17 @@ function sweepOldDemos(): void {
  * Every name here is invented. Nothing from a real class is used, which is the
  * whole point — a public demo must not carry a real child's name.
  */
-function seedDemoData(): void {
-  const db = getDb();
-
-  db.prepare(
+async function seedDemoData(): Promise<void> {
+  await execute(
     "INSERT INTO users (username, display_name, password_hash, role) VALUES (?, ?, ?, ?)",
-  ).run("demo", "Demo visitor", hashPassword("demo-not-a-real-account"), "admin");
+    "demo",
+    "Demo visitor",
+    hashPassword("demo-not-a-real-account"),
+    "admin",
+  );
 
-  db.prepare("INSERT INTO grades (name, sort_order) VALUES (?, ?)").run("5th Grade", 50);
-  db.prepare("INSERT INTO grades (name, sort_order) VALUES (?, ?)").run("4th Grade", 40);
+  await execute("INSERT INTO grades (name, sort_order) VALUES (?, ?)", "5th Grade", 50);
+  await execute("INSERT INTO grades (name, sort_order) VALUES (?, ?)", "4th Grade", 40);
 
   const grade5 = 1;
   const grade4 = 2;
@@ -133,9 +135,13 @@ function seedDemoData(): void {
     [grade4, "A 4-1 (Sample)", "Ms. Lindqvist"],
   ];
   for (const [gradeId, label, teacher] of classes) {
-    db.prepare(
+    await execute(
       "INSERT INTO classes (grade_id, label, teacher_name, sort_order) VALUES (?, ?, ?, ?)",
-    ).run(gradeId, label, teacher, 10);
+      gradeId,
+      label,
+      teacher,
+      10,
+    );
   }
 
   // Eight Sundays, so the grid is wide enough to show the running total and
@@ -151,11 +157,15 @@ function seedDemoData(): void {
     ["10/26", "2025-10-26"],
   ];
   for (const gradeId of [grade5, grade4]) {
-    weeks.forEach(([label, date], i) => {
-      db.prepare(
+    for (const [i, [label, date]] of weeks.entries()) {
+      await execute(
         "INSERT INTO weeks (grade_id, label, attendance_date, sort_order) VALUES (?, ?, ?, ?)",
-      ).run(gradeId, label, date, (i + 1) * 10);
-    });
+        gradeId,
+        label,
+        date,
+        (i + 1) * 10,
+      );
+    }
   }
 
   const roster: [number, string, string | null][] = [
@@ -172,21 +182,23 @@ function seedDemoData(): void {
   ];
 
   for (const [classId, english, korean] of roster) {
-    db.prepare(
+    await execute(
       "INSERT INTO kids (class_id, english_name, korean_name, sort_order) VALUES (?, ?, ?, ?)",
-    ).run(classId, english, korean, 10);
+      classId,
+      english,
+      korean,
+      10,
+    );
   }
 
   // A believable spread: most weeks attended, a few missed, page counts that
   // vary the way real ones do.
-  const kids = db.prepare("SELECT id, class_id FROM kids").all() as {
-    id: number;
-    class_id: number;
-  }[];
-  const weekRows = db.prepare("SELECT id, grade_id FROM weeks").all() as {
-    id: number;
-    grade_id: number;
-  }[];
+  const kids = await queryAll<{ id: number; class_id: number }>(
+    "SELECT id, class_id FROM kids",
+  );
+  const weekRows = await queryAll<{ id: number; grade_id: number }>(
+    "SELECT id, grade_id FROM weeks",
+  );
 
   let n = 0;
   for (const kid of kids) {
@@ -195,10 +207,14 @@ function seedDemoData(): void {
       n += 1;
       const absent = n % 7 === 0;
       const pages = absent ? 0 : [3, 5, 6, 4, 7, 5, 8, 6][n % 8];
-      db.prepare(
+      await execute(
         `INSERT INTO entries (kid_id, week_id, attendance, qt_pages, updated_by)
          VALUES (?, ?, ?, ?, 'demo')`,
-      ).run(kid.id, week.id, absent ? "ABSENT" : "HERE", pages);
+        kid.id,
+        week.id,
+        absent ? "ABSENT" : "HERE",
+        pages,
+      );
     }
   }
 }

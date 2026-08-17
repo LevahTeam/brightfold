@@ -1,4 +1,4 @@
-import { getDb, tx, queryAll, queryOne } from "./db";
+import { execute, tx, queryAll, queryOne } from "./db";
 import type {
   Attendance,
   ClassRow,
@@ -10,22 +10,22 @@ import type {
 
 // ------------------------------------------------------------------ grades
 
-export function listGrades(): Grade[] {
+export async function listGrades(): Promise<Grade[]> {
   return queryAll<Grade>(
     "SELECT id, name, sort_order FROM grades ORDER BY sort_order, name",
   );
 }
 
-export function getGrade(id: number): Grade | null {
+export async function getGrade(id: number): Promise<Grade | null> {
   return queryOne<Grade>("SELECT id, name, sort_order FROM grades WHERE id = ?", id);
 }
 
 /** Idempotent: re-creating an existing grade returns the existing row. */
-export function createGrade(name: string, sortOrder?: number): Grade {
+export async function createGrade(name: string, sortOrder?: number): Promise<Grade> {
   const clean = name.trim();
   if (!clean) throw new ValidationError("Grade name cannot be empty.");
 
-  const existing = queryOne<Grade>(
+  const existing = await queryOne<Grade>(
     "SELECT id, name, sort_order FROM grades WHERE name = ?",
     clean,
   );
@@ -36,62 +36,67 @@ export function createGrade(name: string, sortOrder?: number): Grade {
   // and silently become the default selection on Records and Print Cards.
   const order =
     sortOrder ??
-    ((queryOne<{ m: number }>("SELECT COALESCE(MAX(sort_order), 0) AS m FROM grades")?.m ?? 0) +
-      10);
+    ((
+      await queryOne<{ m: number }>("SELECT COALESCE(MAX(sort_order), 0) AS m FROM grades")
+    )?.m ?? 0) + 10;
 
-  getDb().prepare("INSERT INTO grades (name, sort_order) VALUES (?, ?)").run(clean, order);
-  return queryOne<Grade>(
+  await execute("INSERT INTO grades (name, sort_order) VALUES (?, ?)", clean, order);
+  return (await queryOne<Grade>(
     "SELECT id, name, sort_order FROM grades WHERE name = ?",
     clean,
-  )!;
+  ))!;
 }
 
 // ----------------------------------------------------------------- classes
 
 const CLASS_COLS = "id, grade_id, label, teacher_name, sort_order";
 
-export function listClasses(gradeId: number): ClassRow[] {
+export async function listClasses(gradeId: number): Promise<ClassRow[]> {
   return queryAll<ClassRow>(
     `SELECT ${CLASS_COLS} FROM classes WHERE grade_id = ? ORDER BY sort_order, label`,
     gradeId,
   );
 }
 
-export function getClass(id: number): ClassRow | null {
+export async function getClass(id: number): Promise<ClassRow | null> {
   return queryOne<ClassRow>(`SELECT ${CLASS_COLS} FROM classes WHERE id = ?`, id);
 }
 
-export function createClass(
+export async function createClass(
   gradeId: number,
   label: string,
   teacherName: string | null,
   sortOrder = 0,
-): ClassRow {
+): Promise<ClassRow> {
   const clean = label.trim();
   if (!clean) throw new ValidationError("Class label cannot be empty.");
-  if (!getGrade(gradeId)) throw new ValidationError("That grade does not exist.");
+  if (!(await getGrade(gradeId))) throw new ValidationError("That grade does not exist.");
 
-  const existing = queryOne<ClassRow>(
+  const existing = await queryOne<ClassRow>(
     `SELECT ${CLASS_COLS} FROM classes WHERE grade_id = ? AND label = ?`,
     gradeId,
     clean,
   );
   if (existing) return existing;
 
-  getDb()
-    .prepare("INSERT INTO classes (grade_id, label, teacher_name, sort_order) VALUES (?, ?, ?, ?)")
-    .run(gradeId, clean, teacherName?.trim() || null, sortOrder);
+  await execute(
+    "INSERT INTO classes (grade_id, label, teacher_name, sort_order) VALUES (?, ?, ?, ?)",
+    gradeId,
+    clean,
+    teacherName?.trim() || null,
+    sortOrder,
+  );
 
-  return queryOne<ClassRow>(
+  return (await queryOne<ClassRow>(
     `SELECT ${CLASS_COLS} FROM classes WHERE grade_id = ? AND label = ?`,
     gradeId,
     clean,
-  )!;
+  ))!;
 }
 
 // -------------------------------------------------------------------- kids
 
-export function listKids(classId: number): Kid[] {
+export async function listKids(classId: number): Promise<Kid[]> {
   return queryAll<Kid>(
     `SELECT id, class_id, english_name, korean_name, sort_order, archived
        FROM kids WHERE class_id = ? AND archived = 0
@@ -100,12 +105,14 @@ export function listKids(classId: number): Kid[] {
   );
 }
 
-export function updateKid(
+export async function updateKid(
   kidId: number,
   fields: { english_name?: string; korean_name?: string | null },
-): void {
-  const db = getDb();
-  const kid = queryOne<Kid>("SELECT id, class_id, english_name FROM kids WHERE id = ?", kidId);
+): Promise<void> {
+  const kid = await queryOne<Kid>(
+    "SELECT id, class_id, english_name FROM kids WHERE id = ?",
+    kidId,
+  );
   if (!kid) throw new ValidationError("That kid does not exist.");
 
   const english = fields.english_name?.trim() ?? kid.english_name;
@@ -115,9 +122,10 @@ export function updateKid(
     fields.korean_name === undefined ? undefined : fields.korean_name?.trim() || null;
 
   if (korean === undefined) {
-    db.prepare("UPDATE kids SET english_name = ? WHERE id = ?").run(english, kidId);
+    await execute("UPDATE kids SET english_name = ? WHERE id = ?", english, kidId);
   } else {
-    db.prepare("UPDATE kids SET english_name = ?, korean_name = ? WHERE id = ?").run(
+    await execute(
+      "UPDATE kids SET english_name = ?, korean_name = ? WHERE id = ?",
       english,
       korean,
       kidId,
@@ -130,17 +138,16 @@ export function updateKid(
  * kid photographed week after week stays one kid and keeps their history and
  * Korean name. Returns the existing id, or creates the kid.
  */
-export function upsertKid(
+export async function upsertKid(
   classId: number,
   englishName: string,
   koreanName: string | null,
-): { id: number; created: boolean } {
-  const db = getDb();
+): Promise<{ id: number; created: boolean }> {
   const english = englishName.trim();
   if (!english) throw new ValidationError("English name cannot be empty.");
   const korean = koreanName?.trim() || null;
 
-  const existing = queryOne<{ id: number; korean_name: string | null }>(
+  const existing = await queryOne<{ id: number; korean_name: string | null }>(
     "SELECT id, korean_name FROM kids WHERE class_id = ? AND english_name = ? COLLATE NOCASE",
     classId,
     english,
@@ -150,37 +157,36 @@ export function upsertKid(
     // Only fill a blank Korean name; never overwrite one a human already
     // corrected with a fresh guess from a photo.
     if (korean && !existing.korean_name) {
-      db.prepare("UPDATE kids SET korean_name = ? WHERE id = ?").run(korean, existing.id);
+      await execute("UPDATE kids SET korean_name = ? WHERE id = ?", korean, existing.id);
     }
     return { id: existing.id, created: false };
   }
 
-  const max = queryOne<{ m: number }>(
+  const max = await queryOne<{ m: number }>(
     "SELECT COALESCE(MAX(sort_order), 0) AS m FROM kids WHERE class_id = ?",
     classId,
   );
 
-  db.prepare(
+  const write = await execute(
     "INSERT INTO kids (class_id, english_name, korean_name, sort_order) VALUES (?, ?, ?, ?)",
-  ).run(classId, english, korean, (max?.m ?? 0) + 10);
-
-  const row = queryOne<{ id: number }>(
-    "SELECT id FROM kids WHERE class_id = ? AND english_name = ? COLLATE NOCASE",
     classId,
     english,
-  )!;
-  return { id: row.id, created: true };
+    korean,
+    (max?.m ?? 0) + 10,
+  );
+
+  return { id: write.lastInsertRowid, created: true };
 }
 
-export function archiveKid(kidId: number): void {
-  getDb().prepare("UPDATE kids SET archived = 1 WHERE id = ?").run(kidId);
+export async function archiveKid(kidId: number): Promise<void> {
+  await execute("UPDATE kids SET archived = 1 WHERE id = ?", kidId);
 }
 
 // ------------------------------------------------------------------- weeks
 
 const WEEK_COLS = "id, grade_id, label, attendance_date, sort_order";
 
-export function listWeeks(gradeId: number): Week[] {
+export async function listWeeks(gradeId: number): Promise<Week[]> {
   return queryAll<Week>(
     `SELECT ${WEEK_COLS} FROM weeks WHERE grade_id = ?
       ORDER BY COALESCE(attendance_date, '9999-99-99'), sort_order, label`,
@@ -189,17 +195,16 @@ export function listWeeks(gradeId: number): Week[] {
 }
 
 /** Weeks are shared across every class in a grade, mirroring the master sheet. */
-export function upsertWeek(
+export async function upsertWeek(
   gradeId: number,
   label: string,
   attendanceDate: string | null,
-): Week {
-  const db = getDb();
+): Promise<Week> {
   const clean = label.trim();
   if (!clean) throw new ValidationError("Week label cannot be empty.");
-  if (!getGrade(gradeId)) throw new ValidationError("That grade does not exist.");
+  if (!(await getGrade(gradeId))) throw new ValidationError("That grade does not exist.");
 
-  const existing = queryOne<Week>(
+  const existing = await queryOne<Week>(
     `SELECT ${WEEK_COLS} FROM weeks WHERE grade_id = ? AND label = ?`,
     gradeId,
     clean,
@@ -207,7 +212,8 @@ export function upsertWeek(
 
   if (existing) {
     if (attendanceDate && !existing.attendance_date) {
-      db.prepare("UPDATE weeks SET attendance_date = ? WHERE id = ?").run(
+      await execute(
+        "UPDATE weeks SET attendance_date = ? WHERE id = ?",
         attendanceDate,
         existing.id,
       );
@@ -216,24 +222,28 @@ export function upsertWeek(
     return existing;
   }
 
-  const max = queryOne<{ m: number }>(
+  const max = await queryOne<{ m: number }>(
     "SELECT COALESCE(MAX(sort_order), 0) AS m FROM weeks WHERE grade_id = ?",
     gradeId,
   );
 
-  db.prepare(
+  await execute(
     "INSERT INTO weeks (grade_id, label, attendance_date, sort_order) VALUES (?, ?, ?, ?)",
-  ).run(gradeId, clean, attendanceDate, (max?.m ?? 0) + 10);
+    gradeId,
+    clean,
+    attendanceDate,
+    (max?.m ?? 0) + 10,
+  );
 
-  return queryOne<Week>(
+  return (await queryOne<Week>(
     `SELECT ${WEEK_COLS} FROM weeks WHERE grade_id = ? AND label = ?`,
     gradeId,
     clean,
-  )!;
+  ))!;
 }
 
-export function deleteWeek(weekId: number): void {
-  getDb().prepare("DELETE FROM weeks WHERE id = ?").run(weekId);
+export async function deleteWeek(weekId: number): Promise<void> {
+  await execute("DELETE FROM weeks WHERE id = ?", weekId);
 }
 
 /**
@@ -245,15 +255,16 @@ export function deleteWeek(weekId: number): void {
  * already made by hand. The review table uses this to leave already-logged
  * columns unticked by default.
  */
-export function getLoggedWeekLabels(classId: number): string[] {
-  return queryAll<{ label: string }>(
+export async function getLoggedWeekLabels(classId: number): Promise<string[]> {
+  const rows = await queryAll<{ label: string }>(
     `SELECT DISTINCT w.label
        FROM entries e
        JOIN kids k  ON k.id = e.kid_id AND k.archived = 0
        JOIN weeks w ON w.id = e.week_id
       WHERE k.class_id = ?`,
     classId,
-  ).map((r) => r.label);
+  );
+  return rows.map((r) => r.label);
 }
 
 // ----------------------------------------------------------------- entries
@@ -265,8 +276,8 @@ export function getLoggedWeekLabels(classId: number): string[] {
  * not match its own week list. `saveSheet` checks this once per import; the
  * single-cell path has to check per call.
  */
-export function assertWeekMatchesKid(kidId: number, weekId: number): void {
-  const row = queryOne<{ kid_grade: number | null; week_grade: number | null }>(
+export async function assertWeekMatchesKid(kidId: number, weekId: number): Promise<void> {
+  const row = await queryOne<{ kid_grade: number | null; week_grade: number | null }>(
     `SELECT (SELECT c.grade_id FROM kids k JOIN classes c ON c.id = k.class_id
               WHERE k.id = ?) AS kid_grade,
             (SELECT grade_id FROM weeks WHERE id = ?) AS week_grade`,
@@ -280,30 +291,33 @@ export function assertWeekMatchesKid(kidId: number, weekId: number): void {
   }
 }
 
-export function setEntry(
+export async function setEntry(
   kidId: number,
   weekId: number,
   attendance: Attendance,
   qtPages: number,
   updatedBy: string | null,
-): void {
+): Promise<void> {
   if (!Number.isInteger(qtPages) || qtPages < 0) {
     throw new ValidationError("QT pages must be a whole number of zero or more.");
   }
   if (attendance !== "HERE" && attendance !== "ABSENT") {
     throw new ValidationError("Attendance must be HERE or ABSENT.");
   }
-  getDb()
-    .prepare(
-      `INSERT INTO entries (kid_id, week_id, attendance, qt_pages, updated_at, updated_by)
-       VALUES (?, ?, ?, ?, datetime('now'), ?)
-       ON CONFLICT (kid_id, week_id) DO UPDATE SET
-         attendance = excluded.attendance,
-         qt_pages   = excluded.qt_pages,
-         updated_at = excluded.updated_at,
-         updated_by = excluded.updated_by`,
-    )
-    .run(kidId, weekId, attendance, qtPages, updatedBy);
+  await execute(
+    `INSERT INTO entries (kid_id, week_id, attendance, qt_pages, updated_at, updated_by)
+     VALUES (?, ?, ?, ?, datetime('now'), ?)
+     ON CONFLICT (kid_id, week_id) DO UPDATE SET
+       attendance = excluded.attendance,
+       qt_pages   = excluded.qt_pages,
+       updated_at = excluded.updated_at,
+       updated_by = excluded.updated_by`,
+    kidId,
+    weekId,
+    attendance,
+    qtPages,
+    updatedBy,
+  );
 }
 
 export interface SaveSheetInput {
@@ -328,12 +342,12 @@ export interface SaveSheetResult {
  * Commit a reviewed grid. All-or-nothing: a bad row aborts the whole import
  * rather than leaving a class half-updated.
  */
-export function saveSheet(input: SaveSheetInput): SaveSheetResult {
-  const cls = getClass(input.classId);
+export async function saveSheet(input: SaveSheetInput): Promise<SaveSheetResult> {
+  const cls = await getClass(input.classId);
   if (!cls) throw new ValidationError("That class does not exist.");
 
   for (const weekId of input.weekIds) {
-    const week = queryOne<{ grade_id: number }>(
+    const week = await queryOne<{ grade_id: number }>(
       "SELECT grade_id FROM weeks WHERE id = ?",
       weekId,
     );
@@ -343,22 +357,26 @@ export function saveSheet(input: SaveSheetInput): SaveSheetResult {
     }
   }
 
-  return tx(() => {
+  return tx(async () => {
     let kidsCreated = 0;
     let kidsMatched = 0;
     let entriesWritten = 0;
 
     for (const row of input.rows) {
-      const { id: kidId, created } = upsertKid(input.classId, row.english_name, row.korean_name);
+      const { id: kidId, created } = await upsertKid(
+        input.classId,
+        row.english_name,
+        row.korean_name,
+      );
       if (created) kidsCreated++;
       else kidsMatched++;
 
-      input.weekIds.forEach((weekId, i) => {
+      for (const [i, weekId] of input.weekIds.entries()) {
         const cell = row.cells[i];
-        if (!cell) return;
-        setEntry(kidId, weekId, cell.attendance, cell.qt_pages, input.updatedBy);
+        if (!cell) continue;
+        await setEntry(kidId, weekId, cell.attendance, cell.qt_pages, input.updatedBy);
         entriesWritten++;
-      });
+      }
     }
 
     return { kidsCreated, kidsMatched, entriesWritten };
@@ -371,13 +389,13 @@ export function saveSheet(input: SaveSheetInput): SaveSheetResult {
  * Build the spreadsheet view. `classId` narrows to one class; omit it for the
  * combined all-classes-in-a-grade view with class header rows.
  */
-export function getRecords(
+export async function getRecords(
   gradeId: number,
   classId?: number,
-): { weeks: Week[]; rows: RecordsKidRow[] } {
-  const weeks = listWeeks(gradeId);
+): Promise<{ weeks: Week[]; rows: RecordsKidRow[] }> {
+  const weeks = await listWeeks(gradeId);
 
-  const kidRows = queryAll<{
+  const kidRows = await queryAll<{
     kid_id: number;
     english_name: string;
     korean_name: string | null;
@@ -396,7 +414,7 @@ export function getRecords(
     classId ?? null,
   );
 
-  const entries = queryAll<{
+  const entries = await queryAll<{
     kid_id: number;
     week_id: number;
     attendance: Attendance;

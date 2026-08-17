@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getDb, queryOne } from "@/lib/db";
+import { queryOne } from "@/lib/db";
 import { deleteWeek, ValidationError } from "@/lib/repo";
 import { withAdmin, requireInt } from "@/lib/api";
 
@@ -18,21 +18,21 @@ type Ctx = { params: Promise<{ id: string }> };
 export const DELETE = withAdmin<Ctx>(async (_user, _req, ctx) => {
   const weekId = requireInt((await ctx.params).id, "Week id");
 
-  const week = queryOne<{ id: number; label: string }>(
+  const week = await queryOne<{ id: number; label: string }>(
     "SELECT id, label FROM weeks WHERE id = ?",
     weekId,
   );
   if (!week) throw new ValidationError("That week does not exist.");
 
-  const count = queryOne<{ n: number }>(
+  const count = await queryOne<{ n: number }>(
     "SELECT COUNT(*) AS n FROM entries WHERE week_id = ?",
     weekId,
   );
 
   // Entries cascade via the foreign key, but report what went with it so the
-  // caller can say so plainly rather than deleting silently.
-  getDb().exec("PRAGMA foreign_keys = ON");
-  deleteWeek(weekId);
+  // caller can say so plainly rather than deleting silently. The pragma is set
+  // when the connection opens.
+  await deleteWeek(weekId);
 
   return NextResponse.json({ ok: true, label: week.label, entriesRemoved: count?.n ?? 0 });
 });

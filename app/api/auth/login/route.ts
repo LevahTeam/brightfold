@@ -37,7 +37,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const user = authenticate(username, password);
+    const user = await authenticate(username, password);
     if (!user) {
       // Same message either way — never reveal which half was wrong.
       return NextResponse.json(

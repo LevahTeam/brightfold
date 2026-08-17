@@ -147,8 +147,11 @@ export async function clearSessionCookie(): Promise<void> {
 /** Fixed fallback hash that makes unknown users cost roughly as much as bad passwords. */
 const DUMMY_HASH = hashPassword("qt-passport-constant-time-placeholder");
 
-export function authenticate(username: string, password: string): User | null {
-  const row = queryOne<User & { password_hash: string }>(
+export async function authenticate(
+  username: string,
+  password: string,
+): Promise<User | null> {
+  const row = await queryOne<User & { password_hash: string }>(
     "SELECT id, username, display_name, role, password_hash FROM users WHERE username = ?",
     username.trim(),
   );

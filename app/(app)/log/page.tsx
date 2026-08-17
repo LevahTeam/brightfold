@@ -6,12 +6,14 @@ import { withRequestDb } from "@/lib/demo";
 export const dynamic = "force-dynamic";
 
 export default async function LogPage() {
-  const grades = await withRequestDb(() =>
-    listGrades().map((g) => ({
-      id: g.id,
-      name: g.name,
-      classes: listClasses(g.id).map((c) => ({ id: c.id, label: c.label })),
-    })),
+  const grades = await withRequestDb(async () =>
+    Promise.all(
+      (await listGrades()).map(async (g) => ({
+        id: g.id,
+        name: g.name,
+        classes: (await listClasses(g.id)).map((c) => ({ id: c.id, label: c.label })),
+      })),
+    ),
   );
 
   // Only the on/off flag reaches the browser — never the key or the model id

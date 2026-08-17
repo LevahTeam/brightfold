@@ -10,7 +10,7 @@
  */
 
 import { randomBytes } from "node:crypto";
-import { getDb } from "../lib/db";
+import { execute, queryAll, queryOne } from "../lib/db";
 import { hashPassword } from "../lib/password";
 
 const [username, supplied] = process.argv.slice(2);
@@ -23,13 +23,13 @@ if (!username) {
   process.exit(1);
 }
 
-const db = getDb();
-const user = db
-  .prepare("SELECT id, username FROM users WHERE username = ?")
-  .get(username.trim()) as { id: number; username: string } | undefined;
+const user = await queryOne<{ id: number; username: string }>(
+  "SELECT id, username FROM users WHERE username = ?",
+  username.trim(),
+);
 
 if (!user) {
-  const all = (db.prepare("SELECT username FROM users").all() as { username: string }[])
+  const all = (await queryAll<{ username: string }>("SELECT username FROM users"))
     .map((u) => u.username)
     .join(", ");
   console.error(`\nNo account called "${username}". Existing accounts: ${all || "(none)"}\n`);
@@ -49,7 +49,8 @@ if (password.length < 8) {
   process.exit(1);
 }
 
-db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(
+await execute(
+  "UPDATE users SET password_hash = ? WHERE id = ?",
   hashPassword(password),
   user.id,
 );

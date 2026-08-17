@@ -10,6 +10,6 @@ export async function POST() {
     return NextResponse.json({ error: "Not available." }, { status: 404 });
   }
   const id = (await cookies()).get(DEMO_COOKIE)?.value;
-  if (id) resetDemo(id);
+  if (id) await resetDemo(id);
   return NextResponse.json({ ok: true });
 }

@@ -1,37 +1,23 @@
-import { DatabaseSync } from "node:sqlite";
+import { createClient, type Client, type InValue, type Transaction } from "@libsql/client";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { mkdirSync } from "node:fs";
 import path from "node:path";
 
 /**
- * The whole app runs off one SQLite file. Two users share it, so writes are
- * rare and contention is a non-issue; WAL keeps reads from blocking the
- * occasional write anyway.
+ * The app talks to libSQL, which is SQLite with a network option.
  *
- * node:sqlite is built into Node 22+, so there is no native module to compile.
- */
-
-const DB_PATH =
-  process.env.QT_DB_PATH ?? path.join(process.cwd(), "data", "qt-passport.db");
-
-/**
- * Which database file the current request is talking to.
+ * That gives one code path for two very different deployments:
  *
- * Normally there is exactly one. Demo mode gives every visitor their own file
- * so they can edit freely without touching anyone else's copy, and this is how
- * a request says which one it means. Unset falls back to DB_PATH.
+ *   local / Fly demo   file:./data/qt-passport.db   a plain file on disk
+ *   Vercel             libsql://…turso.io           a hosted database
+ *
+ * Vercel is the reason for the second. Serverless functions get a throwaway
+ * filesystem, so a SQLite file there is wiped between invocations — the site
+ * would look fine and lose every record silently. A hosted database is the
+ * only way for the deployed app to keep anything.
+ *
+ * The cost of a network database is that every query is asynchronous, which is
+ * why everything below returns a promise.
  */
-const currentDbPath = new AsyncLocalStorage<string>();
-
-/** Open handles, keyed by file path. */
-const instances = new Map<string, DatabaseSync>();
-
-/**
- * Cap on simultaneously open demo databases. Each visitor's file stays open
- * after their first request, so without a ceiling a busy demo would leak file
- * handles until the process ran out.
- */
-const MAX_OPEN = 24;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
@@ -106,63 +92,112 @@ CREATE INDEX IF NOT EXISTS classes_grade_idx ON classes (grade_id);
 CREATE INDEX IF NOT EXISTS weeks_grade_idx  ON weeks (grade_id);
 `;
 
-/** Run `fn` against a specific database file. */
-export function runWithDb<T>(dbPath: string, fn: () => T): T {
-  return currentDbPath.run(dbPath, fn);
+/** Where this process talks by default. */
+function defaultUrl(): string {
+  const hosted = process.env.TURSO_DATABASE_URL?.trim();
+  if (hosted) return hosted;
+  const file = process.env.QT_DB_PATH ?? path.join(process.cwd(), "data", "qt-passport.db");
+  return file.startsWith("file:") ? file : `file:${file}`;
 }
 
 /**
- * Forget an open handle.
+ * Which database the current request is talking to.
  *
- * Deleting a database file is not enough on its own: the cached handle still
- * refers to the deleted file, so later reads and writes go to a file nobody
- * can see. Demo resets delete the file, so they have to close it here too.
+ * Normally there is exactly one. The demo gives every visitor their own so
+ * they can edit freely without touching anyone else's copy, and this is how a
+ * request says which one it means.
  */
-export function closeDb(dbPath: string): void {
-  const open = instances.get(dbPath);
-  if (!open) return;
+const currentDbUrl = new AsyncLocalStorage<string>();
+
+/**
+ * The transaction a request is currently inside, if any.
+ *
+ * libSQL hands back a transaction as its own object, so a query sent to the
+ * client instead of that object would quietly execute outside the transaction
+ * and survive a rollback. Carrying it here means the helpers below route to
+ * the right place on their own, and callers inside `tx` need no special care.
+ */
+const currentTx = new AsyncLocalStorage<Transaction>();
+
+/** Connections, keyed by url. Opening is async, so the promise is cached. */
+const clients = new Map<string, Promise<Client>>();
+
+/**
+ * Cap on simultaneously open demo databases. Each visitor's connection stays
+ * open after their first request, so without a ceiling a busy demo would leak
+ * connections until the process ran out.
+ */
+const MAX_OPEN = 24;
+
+/** The database the current request is using. */
+export function activeDbUrl(): string {
+  return currentDbUrl.getStore() ?? defaultUrl();
+}
+
+/** Run `fn` against a specific database. */
+export function runWithDb<T>(url: string, fn: () => T): T {
+  return currentDbUrl.run(url.startsWith("file:") ? url : `file:${url}`, fn);
+}
+
+/**
+ * Forget a connection.
+ *
+ * Deleting a database file is not enough on its own: the cached connection
+ * still refers to the deleted file, so later reads and writes go somewhere
+ * nobody can see. Demo resets delete the file, so they close it here too.
+ */
+export async function closeDb(url: string): Promise<void> {
+  const key = url.startsWith("file:") ? url : `file:${url}`;
+  const pending = clients.get(key);
+  if (!pending) return;
+  clients.delete(key);
   try {
-    open.close();
+    (await pending).close();
   } catch {
     /* already closed */
   }
-  instances.delete(dbPath);
 }
 
-/** The file the current request is using. */
-export function activeDbPath(): string {
-  return currentDbPath.getStore() ?? DB_PATH;
+async function connect(url: string): Promise<Client> {
+  const token = process.env.TURSO_AUTH_TOKEN?.trim();
+  // A token is meaningless for a local file and libSQL rejects the pairing.
+  const client = url.startsWith("file:")
+    ? createClient({ url })
+    : createClient({ url, authToken: token });
+
+  if (url.startsWith("file:")) {
+    // Local files get the pragmas that make concurrent use safe. A hosted
+    // database manages its own journalling and rejects these.
+    await client.execute("PRAGMA journal_mode = WAL");
+    await client.execute("PRAGMA busy_timeout = 5000");
+  }
+  await client.execute("PRAGMA foreign_keys = ON");
+  await client.executeMultiple(SCHEMA);
+  await migrate(client);
+  return client;
 }
 
-export function getDb(): DatabaseSync {
-  const dbPath = activeDbPath();
+export function getDb(): Promise<Client> {
+  const url = activeDbUrl();
 
-  const open = instances.get(dbPath);
+  const open = clients.get(url);
   if (open) return open;
 
-  // Evict the oldest handle rather than growing without limit. Map iterates in
-  // insertion order, so the first key is the least recently opened.
-  if (instances.size >= MAX_OPEN) {
-    const oldest = instances.keys().next().value;
-    if (oldest && oldest !== DB_PATH) {
-      try {
-        instances.get(oldest)?.close();
-      } catch {
-        /* already closed */
-      }
-      instances.delete(oldest);
-    }
+  // Evict the oldest connection rather than growing without limit. Map
+  // iterates in insertion order, so the first key is the least recently opened.
+  if (clients.size >= MAX_OPEN) {
+    const oldest = clients.keys().next().value;
+    if (oldest && oldest !== defaultUrl()) void closeDb(oldest);
   }
 
-  mkdirSync(path.dirname(dbPath), { recursive: true });
-  const db = new DatabaseSync(dbPath);
-  db.exec("PRAGMA journal_mode = WAL");
-  db.exec("PRAGMA foreign_keys = ON");
-  db.exec("PRAGMA busy_timeout = 5000");
-  db.exec(SCHEMA);
-  migrate(db);
-  instances.set(dbPath, db);
-  return db;
+  const pending = connect(url).catch((err) => {
+    // A failed connection must not be cached, or every later request reuses
+    // the same rejection and the app never recovers.
+    clients.delete(url);
+    throw err;
+  });
+  clients.set(url, pending);
+  return pending;
 }
 
 /**
@@ -172,49 +207,67 @@ export function getDb(): DatabaseSync {
  * version, so a new column has to be added explicitly or existing installs
  * break on upgrade.
  */
-function migrate(db: DatabaseSync): void {
-  const columns = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
-  if (!columns.some((c) => c.name === "role")) {
+async function migrate(client: Client): Promise<void> {
+  const info = await client.execute("PRAGMA table_info(users)");
+  const hasRole = info.rows.some((r) => (r as { name?: unknown }).name === "role");
+  if (!hasRole) {
     // Existing installs predate roles. Everyone becomes an admin so nobody is
     // locked out of something they could do yesterday; the seed then sets the
     // intended roles for fresh installs.
-    db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'admin'");
+    await client.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'admin'");
   }
 }
 
-/**
- * node:sqlite hands back rows with a null prototype. React Server Components
- * refuse to serialize those across the server/client boundary ("Only plain
- * objects ... can be passed to Client Components"), so every read goes through
- * these helpers and comes back as a plain object.
- */
-export function queryAll<T>(sql: string, ...params: unknown[]): T[] {
-  const rows = getDb()
-    .prepare(sql)
-    .all(...(params as never[]));
-  return rows.map((r) => ({ ...r })) as T[];
+/** Whichever of the connection or the open transaction a query belongs to. */
+async function runner(): Promise<Client | Transaction> {
+  return currentTx.getStore() ?? (await getDb());
 }
 
-export function queryOne<T>(sql: string, ...params: unknown[]): T | null {
-  const row = getDb()
-    .prepare(sql)
-    .get(...(params as never[]));
+export async function queryAll<T>(sql: string, ...params: unknown[]): Promise<T[]> {
+  const res = await (await runner()).execute({ sql, args: params as InValue[] });
+  return res.rows.map((r) => ({ ...r })) as T[];
+}
+
+export async function queryOne<T>(sql: string, ...params: unknown[]): Promise<T | null> {
+  const res = await (await runner()).execute({ sql, args: params as InValue[] });
+  const row = res.rows[0];
   return row === undefined ? null : ({ ...row } as T);
 }
 
-/** Run `fn` inside a transaction, rolling back on any throw. */
-export function tx<T>(fn: (db: DatabaseSync) => T): T {
-  const db = getDb();
-  db.exec("BEGIN");
+export interface WriteResult {
+  /** Narrowed from libSQL's bigint, which no caller here needs. */
+  lastInsertRowid: number;
+  rowsAffected: number;
+}
+
+export async function execute(sql: string, ...params: unknown[]): Promise<WriteResult> {
+  const res = await (await runner()).execute({ sql, args: params as InValue[] });
+  return {
+    lastInsertRowid: res.lastInsertRowid === undefined ? 0 : Number(res.lastInsertRowid),
+    rowsAffected: res.rowsAffected,
+  };
+}
+
+/**
+ * Run `fn` inside a transaction, rolling back on any throw.
+ *
+ * Nested calls join the outer transaction rather than opening a second one,
+ * which would deadlock against the write lock the first already holds.
+ */
+export async function tx<T>(fn: () => Promise<T>): Promise<T> {
+  if (currentTx.getStore()) return fn();
+
+  const db = await getDb();
+  const transaction = await db.transaction("write");
   try {
-    const result = fn(db);
-    db.exec("COMMIT");
+    const result = await currentTx.run(transaction, fn);
+    await transaction.commit();
     return result;
   } catch (err) {
-    // A failing ROLLBACK must not replace the error that caused it — that
-    // would turn a clear "duplicate name" into an opaque SQLite message.
+    // A failing rollback must not replace the error that caused it — that
+    // would turn a clear "duplicate name" into an opaque database message.
     try {
-      db.exec("ROLLBACK");
+      await transaction.rollback();
     } catch (rollbackErr) {
       console.error("[qt-passport] rollback failed after an error:", rollbackErr);
     }
