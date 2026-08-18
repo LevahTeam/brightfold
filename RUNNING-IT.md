@@ -156,6 +156,14 @@ npm run db:backup
 ```
 
 a timestamped copy lands in that folder and Drive syncs it off the machine.
+
+To get a readable SQL copy instead of a database file — useful for archiving a
+finished term, or for moving to another setup:
+
+```bash
+node scripts/export.mjs
+```
+
 Do this **every week during the ministry year**, and before anything unusual.
 
 > ⚠️ **Do not move the live database into a Drive or iCloud folder.** Sync

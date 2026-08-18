@@ -37,37 +37,25 @@ untouched.
 
 ## 1. Create the database
 
-Install the Turso CLI and sign up (it opens a browser; use whichever account
-you like):
+Do this in the browser. No command line, nothing to install.
 
-```bash
-brew install tursodatabase/tap/turso
-```
+1. Go to **https://turso.tech** and sign up. The free tier is enough and asks
+   for no card.
+2. Create a database. Name it `qt-passport`. Take the default region, or pick
+   the one nearest you.
+3. Open it and collect **two values**:
+   - the **database URL**, which looks like `libsql://qt-passport-you.turso.io`
+   - a **token**, from *Create token* (choose full access, no expiry)
 
-```bash
-turso auth signup
-```
+Keep both somewhere you can paste from in a minute.
 
-Create the database:
+The token is a **password to your database**. Don't put it in a message, a
+document, or the repository — it goes straight into Vercel in step 5.
 
-```bash
-turso db create qt-passport
-```
-
-Now get the two values the app needs. Keep this terminal open — you'll paste
-both into Vercel shortly.
-
-```bash
-turso db show qt-passport --url
-```
-
-```bash
-turso db tokens create qt-passport
-```
-
-The first prints a `libsql://…` address. The second prints a long token, which
-is a **password to your database** — don't put it in a message, a document, or
-the repository.
+> **The `turso` command-line tool is optional and not needed anywhere in this
+> guide.** If you want it later, Homebrew now requires you to explicitly trust
+> its third-party tap (`brew trust libsql/sqld`) before it will install, which
+> is a decision to make yourself.
 
 ---
 
@@ -150,16 +138,21 @@ class.
 TURSO_DATABASE_URL='<url>' TURSO_AUTH_TOKEN='<token>' node scripts/admin.mjs set-password pastor 'the-new-one'
 ```
 
-**Backups.** Turso keeps its own point-in-time backups, but a copy you control
-is worth having. This writes the whole database to a file:
+**Backups.** Turso keeps its own point-in-time backups, but those live in the
+same account as the data — a copy you hold yourself is the one that survives
+losing access to that account. This writes everything to a plain SQL file:
 
 ```bash
-turso db shell qt-passport .dump > qt-passport-backup.sql
+TURSO_DATABASE_URL='<url>' TURSO_AUTH_TOKEN='<token>' node scripts/export.mjs
 ```
 
-Do it at the end of each term. `npm run db:backup` is for the *local* file and
-refuses to run when `TURSO_DATABASE_URL` is set, rather than pretending to have
-backed something up.
+Do it at the end of each term. The file is ordinary SQL: readable, and
+restorable into a fresh database. Keep it wherever you would keep a paper
+register — it has the children's real names in it.
+
+`npm run db:backup` is for the *local* file and refuses to run when
+`TURSO_DATABASE_URL` is set, rather than pretending to have backed something
+up.
 
 **Updating the app.** Pushing to `main` on GitHub redeploys automatically.
 
