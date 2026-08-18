@@ -162,8 +162,30 @@ async function missing(db, username) {
   process.exit(1);
 }
 
+/**
+ * Say which database this is talking to, before doing anything.
+ *
+ * Without this, forgetting the environment variables silently edits the local
+ * file instead of the hosted database, and the output looks identical either
+ * way — "already exists, left alone" reads the same whether it found the
+ * accounts you meant or a completely different set.
+ */
+function announceTarget() {
+  if (HOSTED) {
+    const host = HOSTED.replace(/^libsql:\/\//, "").split("?")[0];
+    console.log(`\nDatabase: HOSTED — ${host}`);
+    if (!process.env.TURSO_AUTH_TOKEN?.trim()) {
+      console.log("  warning: TURSO_AUTH_TOKEN is not set; this will probably fail.");
+    }
+  } else {
+    console.log(`\nDatabase: LOCAL FILE — ${DB_PATH}`);
+    console.log("  (set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN to use the hosted one)");
+  }
+}
+
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
+  announceTarget();
   const db = await open();
 
   switch (command) {
