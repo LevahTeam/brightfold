@@ -128,6 +128,21 @@ like `https://brightfold.vercel.app`.
 Open it, sign in as `pastor` with the password from step 2, and add your first
 class.
 
+### Use a separate Preview database
+
+Before the first production deploy, create a second Turso database named
+`qt-passport-preview`. Seed it with invented data only, then configure Vercel's
+**Preview** environment to use that URL and token. Configure the real database
+credentials for **Production** only.
+
+This separation matters: Vercel creates a preview address for branches and pull
+requests. Testing a preview must never edit the church's real attendance
+records. Vercel's environment-variable screen lets the same key have different
+Preview and Production values.
+
+Use a different `QTP_SESSION_SECRET` for Preview as well. A session created on
+one environment must not be accepted by the other.
+
 ---
 
 ## Afterwards
@@ -159,6 +174,34 @@ up.
 **Keeping it private.** The app sends `noindex` on every page, so it stays out
 of Google. Anyone with the address still meets a login screen, and only the two
 accounts you created can get past it.
+
+## Automated encrypted backups
+
+The repository includes a weekly backup workflow. It exports the hosted
+database, encrypts it before upload, and keeps the encrypted artifact for 30
+days. The plaintext SQL file is removed before the artifact is stored.
+
+In the GitHub repository, add these Actions secrets:
+
+| Name | Value |
+| --- | --- |
+| `TURSO_DATABASE_URL` | The production database URL |
+| `TURSO_AUTH_TOKEN` | The production database token |
+| `BACKUP_ENCRYPTION_PASSWORD` | A unique random password stored outside GitHub |
+
+Run **Encrypted weekly database backup** once manually and download the
+artifact. To decrypt it:
+
+```bash
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+  -in qt-passport.sql.enc -out qt-passport.sql \
+  -pass pass:'your-backup-password'
+```
+
+Open the resulting SQL file and confirm it contains the expected tables. Do
+this restore check after initial setup and at least once each term. The backup
+password is the only way to recover these files, so keep it in the same place
+as the pastor account password.
 
 ---
 

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
- * Edge-side gate.
+ * Request-side gate.
  *
  * It only checks that a session cookie is present and roughly well formed. The
  * signature is verified in `requireUser()` on the Node runtime, where the HMAC
@@ -19,7 +19,13 @@ function isDemo(): boolean {
   return process.env.DEMO_MODE === "1";
 }
 
-export function middleware(req: NextRequest) {
+function privateResponse<T extends NextResponse>(res: T): T {
+  res.headers.set("Cache-Control", "private, no-store, max-age=0");
+  res.headers.set("Pragma", "no-cache");
+  return res;
+}
+
+export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (pathname.startsWith("/_next") || pathname === "/favicon.ico") {
@@ -29,8 +35,6 @@ export function middleware(req: NextRequest) {
   if (isDemo()) {
     const res = NextResponse.next();
     if (!/^[a-f0-9]{32}$/i.test(req.cookies.get(DEMO_COOKIE)?.value ?? "")) {
-      // A fresh visitor gets their own workspace. Not a security boundary —
-      // it only keeps one visitor's edits out of another's view.
       res.cookies.set(DEMO_COOKIE, crypto.randomUUID().replace(/-/g, ""), {
         httpOnly: true,
         sameSite: "lax",
@@ -39,22 +43,22 @@ export function middleware(req: NextRequest) {
         maxAge: 60 * 60 * 6,
       });
     }
-    return res;
+    return privateResponse(res);
   }
 
-  if (PUBLIC_PATHS.includes(pathname)) return NextResponse.next();
+  if (PUBLIC_PATHS.includes(pathname)) return privateResponse(NextResponse.next());
 
   const token = req.cookies.get("qtp_session")?.value;
-  if (token && token.includes(".")) return NextResponse.next();
+  if (token && token.includes(".")) return privateResponse(NextResponse.next());
 
   if (pathname.startsWith("/api/")) {
-    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+    return privateResponse(NextResponse.json({ error: "Not signed in" }, { status: 401 }));
   }
 
   const url = req.nextUrl.clone();
   url.pathname = "/login";
   url.search = pathname === "/" ? "" : `?next=${encodeURIComponent(pathname)}`;
-  return NextResponse.redirect(url);
+  return privateResponse(NextResponse.redirect(url));
 }
 
 export const config = {

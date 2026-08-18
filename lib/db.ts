@@ -1,6 +1,7 @@
 import { createClient, type Client, type InValue, type Transaction } from "@libsql/client";
 import { AsyncLocalStorage } from "node:async_hooks";
 import path from "node:path";
+import { ConfigError } from "./errors";
 
 /**
  * The app talks to libSQL, which is SQLite with a network option.
@@ -90,12 +91,45 @@ CREATE INDEX IF NOT EXISTS entries_kid_idx  ON entries (kid_id);
 CREATE INDEX IF NOT EXISTS kids_class_idx   ON kids (class_id);
 CREATE INDEX IF NOT EXISTS classes_grade_idx ON classes (grade_id);
 CREATE INDEX IF NOT EXISTS weeks_grade_idx  ON weeks (grade_id);
+
+-- Shared login throttling. Keeping this in the database makes the limit hold
+-- across every serverless instance instead of resetting on each cold start.
+CREATE TABLE IF NOT EXISTS login_rate_limits (
+  key_hash      TEXT PRIMARY KEY,
+  hits          INTEGER NOT NULL,
+  reset_at      INTEGER NOT NULL,
+  blocked_until INTEGER NOT NULL DEFAULT 0,
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS login_rate_limits_expiry_idx
+  ON login_rate_limits (reset_at, blocked_until);
+
+-- Human-readable history for corrections and destructive actions. It has no
+-- foreign keys deliberately: deleting a week or archiving a child must not
+-- delete the record explaining who did it and what changed.
+CREATE TABLE IF NOT EXISTS audit_events (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  actor       TEXT,
+  action      TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id   TEXT NOT NULL,
+  before_json TEXT,
+  after_json  TEXT,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS audit_events_created_idx
+  ON audit_events (created_at DESC, id DESC);
 `;
 
 /** Where this process talks by default. */
 function defaultUrl(): string {
   const hosted = process.env.TURSO_DATABASE_URL?.trim();
   if (hosted) return hosted;
+  if (process.env.VERCEL === "1" || process.env.QTP_REQUIRE_HOSTED_DB === "1") {
+    throw new ConfigError(
+      "TURSO_DATABASE_URL is required on hosted deployments so records are not lost.",
+    );
+  }
   const file = process.env.QT_DB_PATH ?? path.join(process.cwd(), "data", "qt-passport.db");
   return file.startsWith("file:") ? file : `file:${file}`;
 }

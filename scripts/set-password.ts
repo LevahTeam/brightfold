@@ -44,8 +44,8 @@ function generated(): string {
 
 const password = supplied ?? generated();
 
-if (password.length < 8) {
-  console.error("\nThat password is too short. Use at least 8 characters.\n");
+if (password.length < 14) {
+  console.error("\nThat password is too short. Use at least 14 characters.\n");
   process.exit(1);
 }
 

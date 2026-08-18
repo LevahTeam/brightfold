@@ -162,6 +162,9 @@ npm run db:backup
 This writes a timestamped database copy to `data/backups/`. Run it every week
 during the ministry year and before any unusual maintenance.
 
+Hosted deployments also include an encrypted weekly GitHub Actions backup.
+Setup and restore instructions are in [`VERCEL.md`](VERCEL.md).
+
 All records live in `data/qt-passport.db`; copying that file somewhere safe is
 also a valid backup.
 

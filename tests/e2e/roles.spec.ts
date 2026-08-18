@@ -63,6 +63,13 @@ test.describe("what the volunteer may do", () => {
     await showFullGrid(page);
     await expect(page.locator("button.week-del")).toHaveCount(0);
   });
+
+  test("cannot open the pastor-only activity history", async ({ page }) => {
+    await signIn(page, VOLUNTEER);
+    await expect(page.getByRole("link", { name: "Activity" })).toHaveCount(0);
+    await page.goto("/activity");
+    await expect(page).toHaveURL(/\/$/);
+  });
 });
 
 test.describe("what the pastor may do", () => {
@@ -80,5 +87,12 @@ test.describe("what the pastor may do", () => {
     await showFullGrid(page);
     await expect(page.locator("button.week-del").first()).toBeAttached();
     await expect(page.locator(".role-pill")).toHaveText(/pastor/i);
+  });
+
+  test("can review the protected activity history", async ({ page }) => {
+    await signIn(page, PASTOR);
+    await page.getByRole("link", { name: "Activity" }).click();
+    await expect(page.getByRole("heading", { name: "Activity" })).toBeVisible();
+    await expect(page.getByText(/Recent corrections and removals/i)).toBeVisible();
   });
 });

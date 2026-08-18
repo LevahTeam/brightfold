@@ -17,13 +17,14 @@ const {
   getRecords,
   listWeeks,
   archiveKid,
+  updateKid,
   getLoggedWeekLabels,
   assertWeekMatchesKid,
   ValidationError,
 } = await import("@/lib/repo");
 
 async function reset() {
-  for (const table of ["entries", "kids", "weeks", "classes", "grades"]) {
+  for (const table of ["audit_events", "entries", "kids", "weeks", "classes", "grades"]) {
     await execute(`DELETE FROM ${table}`);
   }
 }
@@ -319,6 +320,25 @@ describe("getRecords", () => {
     // across the server/client boundary.
     expect(Object.getPrototypeOf(weeks[0])).toBe(Object.prototype);
     expect(Object.getPrototypeOf(rows[0])).toBe(Object.prototype);
+  });
+
+  it("records who corrected or archived a child", async () => {
+    const g = await createGrade("5th Grade");
+    const c = await createClass(g.id, "A", null);
+    const kid = await upsertKid(c.id, "Original Name", null);
+
+    await updateKid(kid.id, { english_name: "Corrected Name" }, "volunteer");
+    await archiveKid(kid.id, "pastor");
+
+    const events = await queryAll<{
+      actor: string;
+      action: string;
+      entity_type: string;
+    }>("SELECT actor, action, entity_type FROM audit_events ORDER BY id");
+    expect(events).toEqual([
+      { actor: "volunteer", action: "update", entity_type: "kid" },
+      { actor: "pastor", action: "archive", entity_type: "kid" },
+    ]);
   });
 });
 

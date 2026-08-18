@@ -23,7 +23,7 @@ const HOSTED = process.env.TURSO_DATABASE_URL?.trim();
 const DB_PATH = process.env.QT_DB_PATH ?? path.join(process.cwd(), "data", "qt-passport.db");
 
 // Parents before children, so restoring in this order never breaks a foreign key.
-const TABLES = ["users", "grades", "classes", "kids", "weeks", "entries"];
+const TABLES = ["users", "grades", "classes", "kids", "weeks", "entries", "audit_events"];
 
 const quote = (v) => {
   if (v === null || v === undefined) return "NULL";

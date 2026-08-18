@@ -87,6 +87,10 @@ async function seed(db) {
       continue;
     }
     const password = supplied ?? generatedPassword();
+    if (password.length < 14) {
+      console.error(`\nThe supplied password for ${username} is too short. Use at least 14 characters.\n`);
+      process.exit(1);
+    }
     await run(
       db,
       "INSERT INTO users (username, display_name, password_hash, role) VALUES (?, ?, ?, ?)",
@@ -112,8 +116,8 @@ async function setPassword(db, username, supplied) {
   if (!user) return await missing(db, username);
 
   const password = supplied ?? generatedPassword();
-  if (password.length < 8) {
-    console.error("\nThat password is too short. Use at least 8 characters.\n");
+  if (password.length < 14) {
+    console.error("\nThat password is too short. Use at least 14 characters.\n");
     process.exit(1);
   }
   await run(db, "UPDATE users SET password_hash = ? WHERE id = ?", hashPassword(password), user.id);

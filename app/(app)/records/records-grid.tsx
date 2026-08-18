@@ -218,7 +218,6 @@ export default function RecordsGrid({
     }
   }
 
-  let lastClassId: number | null = null;
 
   const activeWeek = weeks[Math.min(weekIdx, weeks.length - 1)];
 
@@ -369,9 +368,10 @@ export default function RecordsGrid({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
-              const showHeader = showClassHeaders && row.class_id !== lastClassId;
-              lastClassId = row.class_id;
+            {rows.map((row, index) => {
+              const showHeader =
+                showClassHeaders &&
+                (index === 0 || rows[index - 1]?.class_id !== row.class_id);
 
               return (
                 <Fragment key={row.kid_id}>

@@ -38,6 +38,9 @@ async function seedUser(
   }
   const supplied = process.env[envVar];
   const password = supplied ?? generatedPassword();
+  if (password.length < 14) {
+    throw new Error(`${envVar} must contain at least 14 characters.`);
+  }
   await execute(
     "INSERT INTO users (username, display_name, password_hash, role) VALUES (?, ?, ?, ?)",
     username,

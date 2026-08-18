@@ -1,8 +1,8 @@
 import { expect, type Page, type APIRequestContext } from "@playwright/test";
 
-export const VOLUNTEER = { username: "volunteer", password: "e2e-volunteer-pw" };
+export const VOLUNTEER = { username: "volunteer", password: "e2e-volunteer-pw-2026" };
 /** The pastor's account is the admin: only it may delete. */
-export const PASTOR = { username: "pastor", password: "e2e-pastor-pw" };
+export const PASTOR = { username: "pastor", password: "e2e-pastor-pw-2026" };
 
 export async function signIn(page: Page, who = VOLUNTEER) {
   await page.goto("/login");

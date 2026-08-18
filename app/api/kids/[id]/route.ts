@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export const PATCH = withAuth<Ctx>(async (_user, req, ctx) => {
+export const PATCH = withAuth<Ctx>(async (user, req, ctx) => {
   const kidId = requireInt((await ctx.params).id, "Kid id");
   const body = await readJson(req);
 
@@ -19,14 +19,14 @@ export const PATCH = withAuth<Ctx>(async (_user, req, ctx) => {
       typeof body.korean_name === "string" ? body.korean_name.trim() || null : null;
   }
 
-  await updateKid(kidId, fields);
+  await updateKid(kidId, fields, user.username);
   return NextResponse.json({ ok: true });
 });
 
-export const DELETE = withAdmin<Ctx>(async (_user, _req, ctx) => {
+export const DELETE = withAdmin<Ctx>(async (user, _req, ctx) => {
   const kidId = requireInt((await ctx.params).id, "Kid id");
   // Archive rather than delete: their past weeks stay intact for totals and
   // for any card already printed.
-  await archiveKid(kidId);
+  await archiveKid(kidId, user.username);
   return NextResponse.json({ ok: true });
 });

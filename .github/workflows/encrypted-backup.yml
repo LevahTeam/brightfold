@@ -1,0 +1,56 @@
+name: Encrypted weekly database backup
+
+on:
+  schedule:
+    - cron: "17 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    env:
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+      BACKUP_ENCRYPTION_PASSWORD: ${{ secrets.BACKUP_ENCRYPTION_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check backup configuration
+        id: configured
+        shell: bash
+        run: |
+          if [ -n "$TURSO_DATABASE_URL" ] && [ -n "$TURSO_AUTH_TOKEN" ] && [ -n "$BACKUP_ENCRYPTION_PASSWORD" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Backup skipped until the three repository secrets are configured."
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.configured.outputs.ready == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Export and encrypt
+        if: steps.configured.outputs.ready == 'true'
+        shell: bash
+        run: |
+          npm ci
+          node scripts/export.mjs qt-passport.sql
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 \
+            -in qt-passport.sql -out qt-passport.sql.enc \
+            -pass env:BACKUP_ENCRYPTION_PASSWORD
+          shred -u qt-passport.sql
+
+      - name: Store encrypted backup
+        if: steps.configured.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: qt-passport-backup-${{ github.run_id }}
+          path: qt-passport.sql.enc
+          retention-days: 30
+          if-no-files-found: error

@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
   try {
     const key = clientKey(req);
-    const rate = checkLoginRate(key);
+    const rate = await checkLoginRate(key);
     if (!rate.allowed) {
       const minutes = Math.ceil(rate.retryAfter / 60);
       return NextResponse.json(
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
       );
     }
 
-    clearLoginRate(key);
+    await clearLoginRate(key);
     await setSessionCookie(user.id);
     return NextResponse.json({ user });
   } catch (err) {

@@ -33,7 +33,7 @@ export default function NavBar({
       </Link>
 
       <nav className="app-nav" aria-label="Main">
-        {LINKS.map((l) => (
+        {[...LINKS, ...(role === "admin" ? [{ href: "/activity", label: "Activity" }] : [])].map((l) => (
           <Link
             key={l.href}
             href={l.href}

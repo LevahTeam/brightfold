@@ -1,4 +1,5 @@
 import { execute, tx, queryAll, queryOne } from "./db";
+import { recordAuditEvent } from "./audit";
 import type {
   Attendance,
   ClassRow,
@@ -108,29 +109,37 @@ export async function listKids(classId: number): Promise<Kid[]> {
 export async function updateKid(
   kidId: number,
   fields: { english_name?: string; korean_name?: string | null },
+  updatedBy: string | null = null,
 ): Promise<void> {
-  const kid = await queryOne<Kid>(
-    "SELECT id, class_id, english_name FROM kids WHERE id = ?",
-    kidId,
-  );
-  if (!kid) throw new ValidationError("That kid does not exist.");
+  await tx(async () => {
+    const kid = await queryOne<Kid>(
+      `SELECT id, class_id, english_name, korean_name, sort_order, archived
+         FROM kids WHERE id = ?`,
+      kidId,
+    );
+    if (!kid) throw new ValidationError("That kid does not exist.");
 
-  const english = fields.english_name?.trim() ?? kid.english_name;
-  if (!english) throw new ValidationError("English name cannot be empty.");
+    const english = fields.english_name?.trim() ?? kid.english_name;
+    if (!english) throw new ValidationError("English name cannot be empty.");
 
-  const korean =
-    fields.korean_name === undefined ? undefined : fields.korean_name?.trim() || null;
+    const korean =
+      fields.korean_name === undefined ? kid.korean_name : fields.korean_name?.trim() || null;
 
-  if (korean === undefined) {
-    await execute("UPDATE kids SET english_name = ? WHERE id = ?", english, kidId);
-  } else {
     await execute(
       "UPDATE kids SET english_name = ?, korean_name = ? WHERE id = ?",
       english,
       korean,
       kidId,
     );
-  }
+    await recordAuditEvent({
+      actor: updatedBy,
+      action: "update",
+      entityType: "kid",
+      entityId: kidId,
+      before: { english_name: kid.english_name, korean_name: kid.korean_name },
+      after: { english_name: english, korean_name: korean },
+    });
+  });
 }
 
 /**
@@ -178,8 +187,24 @@ export async function upsertKid(
   return { id: write.lastInsertRowid, created: true };
 }
 
-export async function archiveKid(kidId: number): Promise<void> {
-  await execute("UPDATE kids SET archived = 1 WHERE id = ?", kidId);
+export async function archiveKid(kidId: number, updatedBy: string | null = null): Promise<void> {
+  await tx(async () => {
+    const kid = await queryOne<Kid>(
+      `SELECT id, class_id, english_name, korean_name, sort_order, archived
+         FROM kids WHERE id = ?`,
+      kidId,
+    );
+    if (!kid) throw new ValidationError("That kid does not exist.");
+    await execute("UPDATE kids SET archived = 1 WHERE id = ?", kidId);
+    await recordAuditEvent({
+      actor: updatedBy,
+      action: "archive",
+      entityType: "kid",
+      entityId: kidId,
+      before: { english_name: kid.english_name, archived: kid.archived },
+      after: { english_name: kid.english_name, archived: 1 },
+    });
+  });
 }
 
 // ------------------------------------------------------------------- weeks
@@ -242,8 +267,29 @@ export async function upsertWeek(
   ))!;
 }
 
-export async function deleteWeek(weekId: number): Promise<void> {
-  await execute("DELETE FROM weeks WHERE id = ?", weekId);
+export async function deleteWeek(
+  weekId: number,
+  updatedBy: string | null = null,
+): Promise<{ label: string; entriesRemoved: number }> {
+  return tx(async () => {
+    const week = await queryOne<Week>(`SELECT ${WEEK_COLS} FROM weeks WHERE id = ?`, weekId);
+    if (!week) throw new ValidationError("That week does not exist.");
+    const count = await queryOne<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM entries WHERE week_id = ?",
+      weekId,
+    );
+    const entriesRemoved = count?.n ?? 0;
+    await execute("DELETE FROM weeks WHERE id = ?", weekId);
+    await recordAuditEvent({
+      actor: updatedBy,
+      action: "delete",
+      entityType: "week",
+      entityId: weekId,
+      before: { ...week, entries: entriesRemoved },
+      after: null,
+    });
+    return { label: week.label, entriesRemoved };
+  });
 }
 
 /**
@@ -304,20 +350,37 @@ export async function setEntry(
   if (attendance !== "HERE" && attendance !== "ABSENT") {
     throw new ValidationError("Attendance must be HERE or ABSENT.");
   }
-  await execute(
-    `INSERT INTO entries (kid_id, week_id, attendance, qt_pages, updated_at, updated_by)
-     VALUES (?, ?, ?, ?, datetime('now'), ?)
-     ON CONFLICT (kid_id, week_id) DO UPDATE SET
-       attendance = excluded.attendance,
-       qt_pages   = excluded.qt_pages,
-       updated_at = excluded.updated_at,
-       updated_by = excluded.updated_by`,
-    kidId,
-    weekId,
-    attendance,
-    qtPages,
-    updatedBy,
-  );
+  await tx(async () => {
+    const before = await queryOne<{ attendance: Attendance; qt_pages: number }>(
+      "SELECT attendance, qt_pages FROM entries WHERE kid_id = ? AND week_id = ?",
+      kidId,
+      weekId,
+    );
+    await execute(
+      `INSERT INTO entries (kid_id, week_id, attendance, qt_pages, updated_at, updated_by)
+       VALUES (?, ?, ?, ?, datetime('now'), ?)
+       ON CONFLICT (kid_id, week_id) DO UPDATE SET
+         attendance = excluded.attendance,
+         qt_pages   = excluded.qt_pages,
+         updated_at = excluded.updated_at,
+         updated_by = excluded.updated_by`,
+      kidId,
+      weekId,
+      attendance,
+      qtPages,
+      updatedBy,
+    );
+    if (updatedBy && updatedBy !== "seed") {
+      await recordAuditEvent({
+        actor: updatedBy,
+        action: before ? "update" : "create",
+        entityType: "entry",
+        entityId: `${kidId}:${weekId}`,
+        before,
+        after: { attendance, qt_pages: qtPages },
+      });
+    }
+  });
 }
 
 export interface SaveSheetInput {

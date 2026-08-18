@@ -9,7 +9,15 @@ import type { User } from "./types";
 export { hashPassword, verifyPassword };
 
 const COOKIE_NAME = "qtp_session";
-const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
+const DEFAULT_SESSION_TTL_HOURS = 24 * 7;
+
+function sessionTtlMs(): number {
+  const configured = Number(process.env.QTP_SESSION_TTL_HOURS ?? DEFAULT_SESSION_TTL_HOURS);
+  const hours = Number.isFinite(configured)
+    ? Math.min(24 * 30, Math.max(1, configured))
+    : DEFAULT_SESSION_TTL_HOURS;
+  return hours * 60 * 60 * 1000;
+}
 
 /**
  * A signed cookie carries the session instead of a database row. The app has
@@ -38,7 +46,7 @@ function sign(data: string): string {
 }
 
 export function createSessionToken(userId: number): string {
-  const payload: SessionPayload = { uid: userId, exp: Date.now() + SESSION_TTL_MS };
+  const payload: SessionPayload = { uid: userId, exp: Date.now() + sessionTtlMs() };
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
   return `${body}.${sign(body)}`;
 }
@@ -130,12 +138,13 @@ async function requestIsHttps(): Promise<boolean> {
 
 export async function setSessionCookie(userId: number): Promise<void> {
   const store = await cookies();
+  const ttl = sessionTtlMs();
   store.set(COOKIE_NAME, createSessionToken(userId), {
     httpOnly: true,
     sameSite: "lax",
     secure: await requestIsHttps(),
     path: "/",
-    maxAge: SESSION_TTL_MS / 1000,
+    maxAge: ttl / 1000,
   });
 }
 
