@@ -222,5 +222,10 @@ wrong or expired. Vercel's *Runtime Logs* tab shows the actual database error.
 `GEMINI_API_KEY` is missing. Both must be set, and Vercel needs a redeploy
 after adding them.
 
+**Gemini returned HTTP 404** — check whether `VISION_MODEL` is set in
+Vercel. The app defaults to `gemini-3.5-flash-lite`; an older deployment may
+still have `gemini-2.5-flash` configured, which Google may not make available
+to new API keys. Set `VISION_MODEL=gemini-3.5-flash-lite` and redeploy.
+
 **Locked out after too many wrong passwords** — that is the brute-force guard.
 It clears after 30 minutes.

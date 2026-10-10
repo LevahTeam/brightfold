@@ -59,7 +59,7 @@ export function readVisionConfig(): VisionConfig {
     case "gemini":
       return {
         provider,
-        model: process.env.VISION_MODEL ?? "gemini-2.5-flash",
+        model: process.env.VISION_MODEL?.trim() || "gemini-3.5-flash-lite",
       };
     case "openai-compatible":
       return {
@@ -157,7 +157,9 @@ async function callGemini(
         },
       ],
       generationConfig: {
-        temperature: 0,
+        // Gemini 3.5 Flash-Lite ignores sampling parameters, and newer models
+        // can reject them. Keep the existing setting for explicit older models.
+        ...(cfg.model === "gemini-3.5-flash-lite" ? {} : { temperature: 0 }),
         responseMimeType: "application/json",
         // A 17-column grid for a dozen kids is a large JSON reply, and the
         // Flash models spend tokens thinking before they emit any of it.
@@ -308,6 +310,9 @@ async function describeFailure(res: Response, label: string): Promise<string> {
   }
   if (res.status === 429) {
     return `${label} rate limit reached (HTTP 429). Free tiers cap requests per minute — wait a moment and try again, or fill the table in by hand.`;
+  }
+  if (res.status === 404 && label === "Gemini") {
+    return `${label} could not use the configured model (HTTP 404). Check VISION_MODEL in the server settings and whether the model is available to your API key, then try again or fill the table in by hand.`;
   }
   if (res.status >= 500) {
     return `${label} is temporarily unavailable (HTTP ${res.status}). Try again shortly.`;

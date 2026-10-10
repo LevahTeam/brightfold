@@ -112,13 +112,13 @@ anywhere**.
 The providers below are supported and each offers a free tier. API keys stay
 on the server and are never exposed to the browser.
 
-**Google Gemini** — the strongest free option for handwriting.
+**Google Gemini** — a free-tier option for reading handwriting.
 Key: https://aistudio.google.com/apikey
 
 ```
 VISION_PROVIDER=gemini
 GEMINI_API_KEY=your-key
-VISION_MODEL=gemini-2.5-flash
+VISION_MODEL=gemini-3.5-flash-lite
 ```
 
 **Groq** — free, OpenAI-compatible. Key: https://console.groq.com/keys
