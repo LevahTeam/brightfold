@@ -29,6 +29,8 @@ export class VisionCallError extends Error {
   constructor(
     message: string,
     readonly status?: number,
+    /** Provider-supplied wait. Undefined means the provider gave no safe reset time. */
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
     this.name = "VisionCallError";
@@ -171,7 +173,8 @@ async function callGemini(
   });
 
   if (!res.ok) {
-    throw new VisionCallError(await describeFailure(res, "Gemini"), res.status);
+    const failure = await describeFailure(res, "Gemini");
+    throw new VisionCallError(failure.message, res.status, failure.retryAfterSeconds);
   }
   const json = (await res.json()) as {
     candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
@@ -231,7 +234,8 @@ async function callOpenAiCompatible(
   });
 
   if (!res.ok) {
-    throw new VisionCallError(await describeFailure(res, "vision provider"), res.status);
+    const failure = await describeFailure(res, "vision provider");
+    throw new VisionCallError(failure.message, res.status, failure.retryAfterSeconds);
   }
   const json = (await res.json()) as {
     choices?: { message?: { content?: string } }[];
@@ -274,7 +278,8 @@ async function callAnthropic(
   });
 
   if (!res.ok) {
-    throw new VisionCallError(await describeFailure(res, "Anthropic"), res.status);
+    const failure = await describeFailure(res, "Anthropic");
+    throw new VisionCallError(failure.message, res.status, failure.retryAfterSeconds);
   }
   const json = (await res.json()) as {
     stop_reason?: string;
@@ -295,27 +300,139 @@ async function callAnthropic(
  * Surface why a call failed without ever echoing the request (which contains
  * the image) or anything key-shaped back to the client.
  */
-async function describeFailure(res: Response, label: string): Promise<string> {
+interface FailureDescription {
+  message: string;
+  retryAfterSeconds?: number;
+}
+
+/** Read either Retry-After or Google's RetryInfo without exposing the body. */
+function retryAfterSeconds(res: Response, body: string): number | undefined {
+  const header = res.headers.get("retry-after")?.trim();
+  if (header) {
+    const seconds = Number(header);
+    if (Number.isFinite(seconds) && seconds > 0) return Math.ceil(seconds);
+
+    const retryDate = Date.parse(header);
+    if (Number.isFinite(retryDate)) {
+      const wait = Math.ceil((retryDate - Date.now()) / 1000);
+      if (wait > 0) return wait;
+    }
+  }
+
+  // Gemini's JSON error commonly contains `"retryDelay":"12.4s"`, and
+  // some responses put the same duration in the human-readable message.
+  const match = body.match(
+    /(?:retryDelay["']?\s*:\s*["']|retry(?:\s+in|\s+after)?\s+)(\d+(?:\.\d+)?)\s*(ms|s|seconds?|m|minutes?|h|hours?)/i,
+  );
+  if (!match) return undefined;
+
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount) || amount <= 0) return undefined;
+  const unit = match[2].toLowerCase();
+  const multiplier = unit === "ms" ? 0.001 : unit.startsWith("m") ? 60 : unit.startsWith("h") ? 3600 : 1;
+  const seconds = Math.ceil(amount * multiplier);
+  // Ignore absurd or malformed provider values rather than disabling uploads
+  // indefinitely. A legitimate daily reset is comfortably below this cap.
+  return seconds > 0 && seconds <= 31 * 24 * 60 * 60 ? seconds : undefined;
+}
+
+/** Google documents request-per-day quotas as resetting at midnight Pacific. */
+function secondsUntilPacificMidnight(now = Date.now()): number {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+    hourCycle: "h23",
+  });
+  const parts = Object.fromEntries(
+    formatter
+      .formatToParts(new Date(now))
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, Number(part.value)]),
+  );
+  const nextDate = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + 1));
+  const desiredUtc = Date.UTC(
+    nextDate.getUTCFullYear(),
+    nextDate.getUTCMonth(),
+    nextDate.getUTCDate(),
+  );
+
+  // Resolve Pacific midnight to UTC. Iterating accommodates daylight-saving
+  // offsets without hard-coding whether midnight is currently UTC-7 or UTC-8.
+  let target = desiredUtc;
+  for (let i = 0; i < 3; i++) {
+    const observed = Object.fromEntries(
+      formatter
+        .formatToParts(new Date(target))
+        .filter((part) => part.type !== "literal")
+        .map((part) => [part.type, Number(part.value)]),
+    );
+    const observedAsUtc = Date.UTC(
+      observed.year,
+      observed.month - 1,
+      observed.day,
+      observed.hour,
+      observed.minute,
+      observed.second,
+    );
+    target += desiredUtc - observedAsUtc;
+  }
+
+  return Math.max(1, Math.ceil((target - now) / 1000));
+}
+
+function isDailyQuota(body: string): boolean {
+  return /(?:requests?\s+per\s+day|per.?day|\bRPD\b)/i.test(body);
+}
+
+async function describeFailure(res: Response, label: string): Promise<FailureDescription> {
   // The body is logged server-side but never returned: provider errors can
   // echo back request fragments, and there is nothing in there a volunteer
   // could act on anyway.
+  let body = "";
   try {
-    console.error(`[qt-passport] ${label} HTTP ${res.status}:`, (await res.text()).slice(0, 500));
+    body = await res.text();
+    console.error(`[qt-passport] ${label} HTTP ${res.status}:`, body.slice(0, 500));
   } catch {
     /* body already consumed or unreadable */
   }
 
   if (res.status === 401 || res.status === 403) {
-    return `${label} rejected the API key (HTTP ${res.status}). Check the key in .env.local.`;
+    return {
+      message: `${label} rejected the API key (HTTP ${res.status}). Check the key in .env.local.`,
+    };
+  }
+  if (res.status === 402) {
+    return {
+      message: `${label} API credits are depleted (HTTP 402). Credits do not reset automatically; add credits or use a project with free-tier quota, or fill the table in by hand.`,
+    };
   }
   if (res.status === 429) {
-    return `${label} rate limit reached (HTTP 429). Free tiers cap requests per minute — wait a moment and try again, or fill the table in by hand.`;
+    const retry =
+      retryAfterSeconds(res, body) ??
+      (isDailyQuota(body) ? secondsUntilPacificMidnight() : undefined);
+    return {
+      message: retry
+        ? `${label} rate limit reached (HTTP 429). The reset time is shown below.`
+        : `${label} rate limit reached (HTTP 429), but Google did not provide a reset time. Try again later, check AI Studio quotas, or fill the table in by hand.`,
+      retryAfterSeconds: retry,
+    };
   }
   if (res.status === 404 && label === "Gemini") {
-    return `${label} could not use the configured model (HTTP 404). Check VISION_MODEL in the server settings and whether the model is available to your API key, then try again or fill the table in by hand.`;
+    return {
+      message: `${label} could not use the configured model (HTTP 404). Check VISION_MODEL in the server settings and whether the model is available to your API key, then try again or fill the table in by hand.`,
+    };
   }
   if (res.status >= 500) {
-    return `${label} is temporarily unavailable (HTTP ${res.status}). Try again shortly.`;
+    return {
+      message: `${label} is temporarily unavailable (HTTP ${res.status}). Try again shortly.`,
+    };
   }
-  return `${label} returned HTTP ${res.status}. The details are in the server log. You can fill the table in by hand instead.`;
+  return {
+    message: `${label} returned HTTP ${res.status}. The details are in the server log. You can fill the table in by hand instead.`,
+  };
 }

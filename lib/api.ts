@@ -64,9 +64,28 @@ export function toErrorResponse(err: unknown): NextResponse {
     return NextResponse.json({ error: err.message, code: "vision_not_configured" }, { status: 503 });
   }
   if (err instanceof VisionCallError) {
+    const retryAt = err.retryAfterSeconds
+      ? new Date(Date.now() + err.retryAfterSeconds * 1000).toISOString()
+      : undefined;
     return NextResponse.json(
-      { error: err.message, code: "vision_failed" },
-      { status: err.status === 429 ? 429 : 502 },
+      {
+        error: err.message,
+        code:
+          err.status === 429
+            ? "vision_rate_limited"
+            : err.status === 402
+              ? "vision_credits_depleted"
+              : "vision_failed",
+        ...(retryAt
+          ? { retryAt, retryAfterSeconds: err.retryAfterSeconds }
+          : {}),
+      },
+      {
+        status: err.status === 429 || err.status === 402 ? err.status : 502,
+        headers: err.retryAfterSeconds
+          ? { "retry-after": String(err.retryAfterSeconds) }
+          : undefined,
+      },
     );
   }
   if (err instanceof ExtractionParseError) {

@@ -344,6 +344,11 @@ a:hover {
   color: var(--status-info-text);
 }
 
+.dropzone--disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
 .empty {
   text-align: center;
   padding: var(--space-10) var(--space-4);

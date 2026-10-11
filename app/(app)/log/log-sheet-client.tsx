@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useRouter } from "next/navigation";
 import type { ExtractedSheet } from "@/lib/types";
 import { prepareSheetPhoto } from "@/lib/client/image";
+import { formatRetryWait, parseRetryAt } from "@/lib/client/retry";
 
 interface GradeOpt {
   id: number;
@@ -99,6 +100,8 @@ export default function LogSheetClient({
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scanRetryAt, setScanRetryAt] = useState<number | null>(null);
+  const [retryClock, setRetryClock] = useState(() => Date.now());
   const [notes, setNotes] = useState<string[]>([]);
   const [result, setResult] = useState<string | null>(null);
 
@@ -120,6 +123,14 @@ export default function LogSheetClient({
     () => columns.filter((c) => c.include && c.alreadyLogged).length,
     [columns],
   );
+
+  const retryBlocked = scanRetryAt !== null && scanRetryAt > retryClock;
+
+  useEffect(() => {
+    if (scanRetryAt === null || scanRetryAt <= Date.now()) return;
+    const timer = window.setInterval(() => setRetryClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [scanRetryAt]);
 
   /**
    * Load week labels that already contain entries for this class.
@@ -145,6 +156,7 @@ export default function LogSheetClient({
   const onFile = useCallback(
     async (file: File) => {
       setError(null);
+      setScanRetryAt(null);
       setResult(null);
       setNotes([]);
       // Revoke the old preview before showing another image; repeated phone
@@ -177,9 +189,15 @@ export default function LogSheetClient({
         body.append("start_month", "8");
 
         const res = await fetch("/api/extract", { method: "POST", body });
-        const data = (await res.json()) as { sheet?: ExtractedSheet; error?: string };
+        const data = (await res.json()) as {
+          sheet?: ExtractedSheet;
+          error?: string;
+          retryAt?: string;
+        };
 
         if (!res.ok || !data.sheet) {
+          setRetryClock(Date.now());
+          setScanRetryAt(parseRetryAt(data.retryAt));
           setError(
             data.error ??
               "The photo could not be read. Try a straighter, better-lit shot, or fill the table in by hand.",
@@ -460,7 +478,27 @@ export default function LogSheetClient({
     <div className="stack">
       {error && (
         <div className="alert alert--error" role="alert">
-          {error}
+          <div>
+            <div>{error}</div>
+            {scanRetryAt !== null && (
+              <div style={{ marginTop: "var(--space-2)", fontWeight: "var(--weight-semibold)" }}>
+                {retryBlocked ? (
+                  <>
+                    Uploads can resume in about {formatRetryWait(scanRetryAt - retryClock)}, at{" "}
+                    {new Date(scanRetryAt).toLocaleString([], {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}.
+                  </>
+                ) : (
+                  "The reported wait has ended. You can try uploading again now."
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
       {result && (
@@ -568,18 +606,25 @@ export default function LogSheetClient({
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
                 className="visually-hidden"
+                disabled={scanning || retryBlocked}
                 onChange={(e) => {
                   const f = e.target.files?.[0];
+                  // Permit choosing the same photo again after a provider
+                  // failure or reported wait period.
+                  e.currentTarget.value = "";
                   if (f) void onFile(f);
                 }}
               />
               <div
-                className="dropzone"
+                className={`dropzone${scanning || retryBlocked ? " dropzone--disabled" : ""}`}
                 role="button"
-                tabIndex={0}
-                onClick={() => fileRef.current?.click()}
+                aria-disabled={scanning || retryBlocked}
+                tabIndex={scanning || retryBlocked ? -1 : 0}
+                onClick={() => {
+                  if (!scanning && !retryBlocked) fileRef.current?.click();
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
+                  if (!scanning && !retryBlocked && (e.key === "Enter" || e.key === " ")) {
                     e.preventDefault();
                     fileRef.current?.click();
                   }
@@ -590,6 +635,15 @@ export default function LogSheetClient({
                     <span className="spinner" aria-hidden="true" />
                     <p style={{ marginTop: "var(--space-3)" }}>
                       Reading the sheet — this can take up to a minute.
+                    </p>
+                  </>
+                ) : retryBlocked ? (
+                  <>
+                    <p style={{ fontWeight: "var(--weight-semibold)" }}>
+                      Photo uploads are temporarily paused
+                    </p>
+                    <p className="hint" style={{ marginTop: "var(--space-2)" }}>
+                      Try again at the time shown above, or fill the table in by hand.
                     </p>
                   </>
                 ) : (

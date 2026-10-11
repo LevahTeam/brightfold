@@ -24,6 +24,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   restoreEnv("VISION_PROVIDER", ORIGINAL_ENV.provider);
@@ -131,6 +132,96 @@ describe("Gemini photo extraction provider", () => {
       name: "VisionCallError",
       status,
       message: expect.stringMatching(explanation),
+    });
+  });
+
+  it("carries a provider Retry-After time without exposing the error body", async () => {
+    const secretBody = "quota details that stay in the server log";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValue(
+        new Response(secretBody, {
+          status: 429,
+          headers: { "retry-after": "90" },
+        }),
+      ),
+    );
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await expect(callVision("image-data", "image/jpeg", readVisionConfig())).rejects.toMatchObject({
+      name: "VisionCallError",
+      status: 429,
+      retryAfterSeconds: 90,
+      message: expect.not.stringContaining(secretBody),
+    });
+  });
+
+  it("reads Gemini RetryInfo when the retry header is absent", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValue(
+        Response.json(
+          {
+            error: {
+              code: 429,
+              message: "Quota exceeded. Please retry in 12.4s.",
+              details: [
+                {
+                  "@type": "type.googleapis.com/google.rpc.RetryInfo",
+                  retryDelay: "12.4s",
+                },
+              ],
+            },
+          },
+          { status: 429 },
+        ),
+      ),
+    );
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await expect(callVision("image-data", "image/jpeg", readVisionConfig())).rejects.toMatchObject({
+      status: 429,
+      retryAfterSeconds: 13,
+    });
+  });
+
+  it("uses midnight Pacific for a clearly identified daily quota", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-11T16:00:00.000Z"));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValue(
+        Response.json(
+          {
+            error: {
+              code: 429,
+              message: "Requests per day quota exceeded.",
+              quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+            },
+          },
+          { status: 429 },
+        ),
+      ),
+    );
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await expect(callVision("image-data", "image/jpeg", readVisionConfig())).rejects.toMatchObject({
+      status: 429,
+      // 9:00 a.m. PDT to midnight PDT is 15 hours.
+      retryAfterSeconds: 15 * 60 * 60,
+    });
+  });
+
+  it("explains that depleted paid credits do not reset automatically", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValue(new Response("", { status: 402 })),
+    );
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await expect(callVision("image-data", "image/jpeg", readVisionConfig())).rejects.toMatchObject({
+      status: 402,
+      message: expect.stringMatching(/do not reset automatically/i),
     });
   });
 
