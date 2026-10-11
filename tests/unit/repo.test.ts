@@ -19,6 +19,8 @@ const {
   archiveKid,
   updateKid,
   getLoggedWeekLabels,
+  listKids,
+  deleteEmptyGrade,
   assertWeekMatchesKid,
   ValidationError,
 } = await import("@/lib/repo");
@@ -49,9 +51,46 @@ describe("grades and classes", () => {
     const b = await createClass(g5.id, "A 1", null);
     expect(a.id).not.toBe(b.id);
   });
+
+  it("deletes an empty mistaken grade and its unused preset dates", async () => {
+    const grade = await createGrade("A 4-1");
+    await upsertWeek(grade.id, "10/4", "2026-10-04");
+
+    await expect(deleteEmptyGrade(grade.id, "pastor")).resolves.toEqual({
+      name: "A 4-1",
+      weeksDeleted: 1,
+    });
+    expect(await queryOne("SELECT id FROM grades WHERE id = ?", grade.id)).toBeNull();
+    expect(await queryOne("SELECT id FROM weeks WHERE grade_id = ?", grade.id)).toBeNull();
+  });
+
+  it("refuses to delete a grade that contains a class", async () => {
+    const grade = await createGrade("4th Grade");
+    await createClass(grade.id, "A 4-1", null);
+
+    await expect(deleteEmptyGrade(grade.id, "pastor")).rejects.toThrow(/contains classes/i);
+    expect(await queryOne("SELECT id FROM grades WHERE id = ?", grade.id)).not.toBeNull();
+  });
+
+  it("rejects deletion of a grade that does not exist", async () => {
+    await expect(deleteEmptyGrade(999_999, "pastor")).rejects.toThrow(/does not exist/i);
+  });
 });
 
 describe("upsertKid name matching", () => {
+  it("returns the active class list alphabetically regardless of entry order", async () => {
+    const grade = await createGrade("5th Grade");
+    const cls = await createClass(grade.id, "A 5-2", null);
+    await upsertKid(cls.id, "Zoe Kim", null);
+    await upsertKid(cls.id, "amy Lee", null);
+    await upsertKid(cls.id, "Ben Park", null);
+
+    expect((await listKids(cls.id)).map((kid) => kid.english_name)).toEqual([
+      "amy Lee",
+      "Ben Park",
+      "Zoe Kim",
+    ]);
+  });
   it("matches an existing kid case-insensitively instead of duplicating", async () => {
     const g = await createGrade("5th Grade");
     const c = await createClass(g.id, "A 5-2", "Ms. Kim");
@@ -249,6 +288,17 @@ describe("saveSheet", () => {
 });
 
 describe("getRecords", () => {
+  it("returns each class roster alphabetically", async () => {
+    const grade = await createGrade("5th Grade");
+    const cls = await createClass(grade.id, "A", null);
+    await upsertKid(cls.id, "Zoe Kim", null);
+    await upsertKid(cls.id, "Amy Lee", null);
+
+    expect((await getRecords(grade.id, cls.id)).rows.map((row) => row.english_name)).toEqual([
+      "Amy Lee",
+      "Zoe Kim",
+    ]);
+  });
   it("sums total pages across every logged week", async () => {
     const g = await createGrade("5th Grade");
     const c = await createClass(g.id, "A 5-2", null);

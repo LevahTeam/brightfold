@@ -87,6 +87,10 @@ export async function startBlankSheet(page: Page): Promise<string> {
   await page.locator("#class").selectOption({ label });
   await page.getByRole("button", { name: /Fill it in by hand/ }).click();
   await expect(page.getByRole("heading", { name: /Check every value/ })).toBeVisible();
+  // Grade dates are now preset. Keep one date selected so logging tests remain
+  // focused on a single cell while a dedicated journey covers all presets.
+  const boxes = page.locator(".week-chip input[type=checkbox]");
+  for (let i = 1; i < (await boxes.count()); i++) await boxes.nth(i).uncheck();
   return label;
 }
 
@@ -99,6 +103,8 @@ export async function reopenSheet(page: Page, label: string) {
   await page.locator("#class").selectOption({ label });
   await page.getByRole("button", { name: /Fill it in by hand/ }).click();
   await expect(page.getByRole("heading", { name: /Check every value/ })).toBeVisible();
+  const boxes = page.locator(".week-chip input[type=checkbox]");
+  for (let i = 1; i < (await boxes.count()); i++) await boxes.nth(i).uncheck();
 }
 
 export const DEMO_CLASS = "A 5-1 (Demo)";

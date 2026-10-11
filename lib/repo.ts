@@ -48,6 +48,44 @@ export async function createGrade(name: string, sortOrder?: number): Promise<Gra
   ))!;
 }
 
+/**
+ * Remove an unused grade. A grade that already contains a class is protected:
+ * cascading that deletion would also erase its roster and attendance history.
+ */
+export async function deleteEmptyGrade(
+  gradeId: number,
+  updatedBy: string | null = null,
+): Promise<{ name: string; weeksDeleted: number }> {
+  return tx(async () => {
+    const grade = await getGrade(gradeId);
+    if (!grade) throw new ValidationError("That grade does not exist.");
+
+    const classCount = await queryOne<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM classes WHERE grade_id = ?",
+      gradeId,
+    );
+    if ((classCount?.count ?? 0) > 0) {
+      throw new ValidationError(
+        "This grade contains classes, so it cannot be deleted. Remove or move those classes first.",
+      );
+    }
+
+    const weekCount = await queryOne<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM weeks WHERE grade_id = ?",
+      gradeId,
+    );
+    await execute("DELETE FROM grades WHERE id = ?", gradeId);
+    await recordAuditEvent({
+      actor: updatedBy,
+      action: "delete",
+      entityType: "grade",
+      entityId: gradeId,
+      before: { name: grade.name, weeks: weekCount?.count ?? 0 },
+    });
+    return { name: grade.name, weeksDeleted: weekCount?.count ?? 0 };
+  });
+}
+
 // ----------------------------------------------------------------- classes
 
 const CLASS_COLS = "id, grade_id, label, teacher_name, sort_order";
@@ -101,7 +139,7 @@ export async function listKids(classId: number): Promise<Kid[]> {
   return queryAll<Kid>(
     `SELECT id, class_id, english_name, korean_name, sort_order, archived
        FROM kids WHERE class_id = ? AND archived = 0
-      ORDER BY sort_order, english_name COLLATE NOCASE`,
+      ORDER BY english_name COLLATE NOCASE, id`,
     classId,
   );
 }
@@ -471,7 +509,7 @@ export async function getRecords(
        JOIN classes c ON c.id = k.class_id
       WHERE c.grade_id = ? AND k.archived = 0
         AND (? IS NULL OR c.id = ?)
-      ORDER BY c.sort_order, c.label, k.sort_order, k.english_name COLLATE NOCASE`,
+      ORDER BY c.sort_order, c.label, k.english_name COLLATE NOCASE, k.id`,
     gradeId,
     classId ?? null,
     classId ?? null,

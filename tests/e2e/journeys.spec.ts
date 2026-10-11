@@ -10,6 +10,7 @@ import {
   optInToOverwrite,
   watchConsole,
   DEMO_CLASS,
+  freshClass,
 } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
@@ -93,7 +94,8 @@ test.describe("logging a sheet by hand", () => {
     // deliberately — that is the path a returning scan takes.
     await reopenSheet(page, label);
     await optInToOverwrite(page);
-    await page.getByLabel("English name, row 1").fill(name);
+    // The saved class roster is reused automatically for the next month.
+    await expect(page.getByLabel("English name, row 1")).toHaveValue(name);
     await page.locator("input.qt-input").first().fill("6");
 
     page.once("dialog", (d) => void d.accept());
@@ -103,6 +105,50 @@ test.describe("logging a sheet by hand", () => {
     await openRecords(page, label);
     await showFullGrid(page);
     await expect(rowFor(page, name)).toHaveCount(1);
+  });
+
+  test("presets grade dates, alphabetizes the saved roster, and labels absences", async ({
+    page,
+  }) => {
+    await page.goto("/log");
+    await page.locator("#grade").selectOption("1");
+    await page.locator("#class").selectOption({ label: DEMO_CLASS });
+    await page.getByRole("button", { name: /Fill it in by hand/ }).click();
+    await expect(page.getByRole("heading", { name: /Check every value/ })).toBeVisible();
+
+    expect(await page.locator(".week-chip").count()).toBeGreaterThan(1);
+    const names = await page
+      .locator('input[aria-label^="English name, row"]')
+      .evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value));
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })));
+    await expect(page.locator('button.att-toggle[data-here="false"]').first()).toHaveText("Absent");
+    await expect(page.locator('button.att-toggle[data-here="true"]').first()).toHaveText("Present");
+  });
+
+  test("discards a roster response when the selected class changes while loading", async ({
+    page,
+  }) => {
+    const emptyClass = await freshClass(page);
+    let delayed = false;
+    await page.route("**/api/records?*", async (route) => {
+      if (!delayed) {
+        delayed = true;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      await route.continue();
+    });
+
+    await page.goto("/log");
+    await page.locator("#grade").selectOption("1");
+    await page.locator("#class").selectOption({ label: DEMO_CLASS });
+    await page.getByRole("button", { name: /Fill it in by hand/ }).click();
+    await page.locator("#class").selectOption({ label: emptyClass });
+
+    await page.waitForTimeout(600);
+    await expect(page.getByRole("heading", { name: /Check every value/ })).toHaveCount(0);
+    await page.getByRole("button", { name: /Fill it in by hand/ }).click();
+    await expect(page.getByRole("heading", { name: /Check every value/ })).toBeVisible();
+    await expect(page.getByLabel("English name, row 1")).toHaveValue("");
   });
 });
 

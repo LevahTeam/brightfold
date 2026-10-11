@@ -57,6 +57,17 @@ test.describe("what the volunteer may do", () => {
     expect(res.status()).toBe(403);
   });
 
+  test("cannot delete an empty grade", async ({ request }) => {
+    await signInApi(request, VOLUNTEER);
+    const created = await request.post("/api/grades", {
+      data: { name: `Volunteer Protected ${Date.now()}` },
+    });
+    const gradeId = (await created.json()).grade.id as number;
+
+    const res = await request.delete(`/api/grades/${gradeId}`);
+    expect(res.status()).toBe(403);
+  });
+
   test("is not shown the delete control in Records", async ({ page }) => {
     await signIn(page, VOLUNTEER);
     await openRecords(page, "A 5-1 (Demo)");
@@ -73,6 +84,25 @@ test.describe("what the volunteer may do", () => {
 });
 
 test.describe("what the pastor may do", () => {
+  test("can delete an empty mistaken grade but cannot delete one with a class", async ({
+    request,
+  }) => {
+    await signInApi(request, PASTOR);
+    const empty = await request.post("/api/grades", {
+      data: { name: `A 4-1 Mistake ${Date.now()}` },
+    });
+    const emptyId = (await empty.json()).grade.id as number;
+    expect((await request.delete(`/api/grades/${emptyId}`)).status()).toBe(200);
+
+    const occupied = await request.post("/api/grades", {
+      data: { name: `Occupied ${Date.now()}` },
+    });
+    const occupiedId = (await occupied.json()).grade.id as number;
+    await request.post(`/api/grades/${occupiedId}/classes`, { data: { label: "A 4-1" } });
+    const refused = await request.delete(`/api/grades/${occupiedId}`);
+    expect(refused.status()).toBe(400);
+    expect((await refused.json()).error).toMatch(/contains classes/i);
+  });
   test("can delete a week", async ({ request }) => {
     await signInApi(request, PASTOR);
     const weekId = await makeThrowawayWeek(request);

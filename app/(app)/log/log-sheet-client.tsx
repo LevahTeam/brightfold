@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { ExtractedSheet } from "@/lib/types";
+import type { ExtractedSheet, RecordsKidRow, Week } from "@/lib/types";
 import { prepareSheetPhoto } from "@/lib/client/image";
 import { formatRetryWait, parseRetryAt } from "@/lib/client/retry";
 
@@ -88,6 +88,8 @@ export default function LogSheetClient({
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
+  const manualRequestRef = useRef(0);
+  const scanRequestRef = useRef(0);
 
   const [gradeId, setGradeId] = useState<string>(grades[0]?.id.toString() ?? "");
   const [classId, setClassId] = useState<string>(
@@ -98,6 +100,7 @@ export default function LogSheetClient({
 
   const [preview, setPreview] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [loadingManual, setLoadingManual] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scanRetryAt, setScanRetryAt] = useState<number | null>(null);
@@ -107,6 +110,7 @@ export default function LogSheetClient({
 
   const [columns, setColumns] = useState<ColumnDraft[]>([]);
   const [rows, setRows] = useState<EditRow[]>([]);
+  const [reviewSource, setReviewSource] = useState<"scan" | "manual" | null>(null);
   const started = columns.length > 0;
 
   const selectedGrade = useMemo(
@@ -155,6 +159,9 @@ export default function LogSheetClient({
 
   const onFile = useCallback(
     async (file: File) => {
+      const requestId = ++scanRequestRef.current;
+      manualRequestRef.current += 1;
+      setLoadingManual(false);
       setError(null);
       setScanRetryAt(null);
       setResult(null);
@@ -178,6 +185,7 @@ export default function LogSheetClient({
         // Browser-side conversion produces a server-readable JPEG from iPhone
         // HEIC and reduces large photos to fit free-tier request limits.
         const prepared = await prepareSheetPhoto(file);
+        if (requestId !== scanRequestRef.current) return;
 
         const body = new FormData();
         body.append("photo", prepared.file);
@@ -194,6 +202,7 @@ export default function LogSheetClient({
           error?: string;
           retryAt?: string;
         };
+        if (requestId !== scanRequestRef.current) return;
 
         if (!res.ok || !data.sheet) {
           setRetryClock(Date.now());
@@ -207,6 +216,7 @@ export default function LogSheetClient({
 
         const sheet = data.sheet;
         const logged = await loadLoggedLabels();
+        if (requestId !== scanRequestRef.current) return;
         setColumns(
           sheet.columns.map((c) => {
             const already = logged.has(c.header.trim().toLowerCase());
@@ -234,6 +244,7 @@ export default function LogSheetClient({
             })),
           })),
         );
+        setReviewSource("scan");
         setNotes(sheet.notes ?? []);
 
         if (sheet.class_label && !classId && !newClassLabel) {
@@ -241,9 +252,10 @@ export default function LogSheetClient({
           setNewTeacher(sheet.teacher_name ?? "");
         }
       } catch {
+        if (requestId !== scanRequestRef.current) return;
         setError("Could not reach the server while scanning.");
       } finally {
-        setScanning(false);
+        if (requestId === scanRequestRef.current) setScanning(false);
       }
     },
     [scanEnabled, classId, newClassLabel, loadLoggedLabels],
@@ -282,12 +294,100 @@ export default function LogSheetClient({
     // Depend on headerKey instead of `columns` to avoid fetching on cell edits.
   }, [classId, headerKey, columns.length, loadLoggedLabels]);
 
-  function startManual() {
-    const blank = blankSheet();
-    setColumns(blank.columns);
-    setRows(blank.rows);
+  async function startManual() {
     setError(null);
     setResult(null);
+    if (!gradeId) {
+      setError("Pick a grade first.");
+      return;
+    }
+
+    const requestId = ++manualRequestRef.current;
+    scanRequestRef.current += 1;
+    setScanning(false);
+    const requestedGradeId = gradeId;
+    const requestedClassId = classId;
+    setLoadingManual(true);
+    try {
+      let weeks: Week[] = [];
+      let recordRows: RecordsKidRow[] = [];
+
+      if (requestedClassId) {
+        const res = await fetch(
+          `/api/records?gradeId=${requestedGradeId}&classId=${requestedClassId}`,
+        );
+        const data = (await res.json()) as {
+          weeks?: Week[];
+          rows?: RecordsKidRow[];
+          error?: string;
+        };
+        if (!res.ok) throw new Error(data.error ?? "Could not load that class.");
+        weeks = data.weeks ?? [];
+        recordRows = data.rows ?? [];
+      } else {
+        const res = await fetch(`/api/grades/${requestedGradeId}/weeks`);
+        const data = (await res.json()) as { weeks?: Week[]; error?: string };
+        if (!res.ok) throw new Error(data.error ?? "Could not load the grade dates.");
+        weeks = data.weeks ?? [];
+      }
+
+      // A slow response for the previous selection must never place that
+      // class's roster under a class the user selected while it was loading.
+      if (requestId !== manualRequestRef.current) return;
+
+      if (weeks.length === 0) {
+        const blank = blankSheet();
+        setColumns(blank.columns);
+        setRows(
+          recordRows.length > 0
+            ? recordRows.map((row) => ({
+                ...emptyRow(1),
+                english: row.english_name,
+                korean: row.korean_name ?? "",
+              }))
+            : blank.rows,
+        );
+      } else {
+        const loggedWeekIds = new Set<number>();
+        for (const row of recordRows) {
+          for (const key of Object.keys(row.cells)) loggedWeekIds.add(Number(key));
+        }
+        setColumns(
+          weeks.map((week) => ({
+            header: week.label,
+            date: week.attendance_date ?? "",
+            include: !loggedWeekIds.has(week.id),
+            alreadyLogged: loggedWeekIds.has(week.id),
+          })),
+        );
+        setRows(
+          recordRows.length > 0
+            ? recordRows.map((row) => ({
+                english: row.english_name,
+                korean: row.korean_name ?? "",
+                outsideGrid: false,
+                uncertainName: false,
+                cells: weeks.map((week) => {
+                  const stored = row.cells[week.id];
+                  return {
+                    here: stored?.attendance === "HERE",
+                    pages: stored?.qt_pages ? String(stored.qt_pages) : "",
+                    uncertain: false,
+                    touched: false,
+                  };
+                }),
+              }))
+            : [emptyRow(weeks.length)],
+        );
+      }
+      setReviewSource("manual");
+      setNotes([]);
+    } catch (err) {
+      if (requestId !== manualRequestRef.current) return;
+      setError(err instanceof Error ? err.message : "Could not load the manual table.");
+    } finally {
+      if (requestId === manualRequestRef.current) setLoadingManual(false);
+    }
   }
 
   // ------------------------------------------------------------ grid edits
@@ -527,6 +627,15 @@ export default function LogSheetClient({
                 className="select"
                 value={gradeId}
                 onChange={(e) => {
+                  manualRequestRef.current += 1;
+                  scanRequestRef.current += 1;
+                  setLoadingManual(false);
+                  setScanning(false);
+                  if (reviewSource === "manual") {
+                    setColumns([]);
+                    setRows([]);
+                    setReviewSource(null);
+                  }
                   setGradeId(e.target.value);
                   const g = grades.find((x) => x.id.toString() === e.target.value);
                   setClassId(g?.classes[0]?.id.toString() ?? "");
@@ -546,7 +655,18 @@ export default function LogSheetClient({
                 id="class"
                 className="select"
                 value={classId}
-                onChange={(e) => setClassId(e.target.value)}
+                onChange={(e) => {
+                  manualRequestRef.current += 1;
+                  scanRequestRef.current += 1;
+                  setLoadingManual(false);
+                  setScanning(false);
+                  if (reviewSource === "manual") {
+                    setColumns([]);
+                    setRows([]);
+                    setReviewSource(null);
+                  }
+                  setClassId(e.target.value);
+                }}
               >
                 <option value="">— Create a new class —</option>
                 {selectedGrade?.classes.map((c) => (
@@ -606,7 +726,7 @@ export default function LogSheetClient({
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
                 className="visually-hidden"
-                disabled={scanning || retryBlocked}
+                disabled={scanning || retryBlocked || loadingManual}
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   // Permit choosing the same photo again after a provider
@@ -616,15 +736,20 @@ export default function LogSheetClient({
                 }}
               />
               <div
-                className={`dropzone${scanning || retryBlocked ? " dropzone--disabled" : ""}`}
+                className={`dropzone${scanning || retryBlocked || loadingManual ? " dropzone--disabled" : ""}`}
                 role="button"
-                aria-disabled={scanning || retryBlocked}
-                tabIndex={scanning || retryBlocked ? -1 : 0}
+                aria-disabled={scanning || retryBlocked || loadingManual}
+                tabIndex={scanning || retryBlocked || loadingManual ? -1 : 0}
                 onClick={() => {
-                  if (!scanning && !retryBlocked) fileRef.current?.click();
+                  if (!scanning && !retryBlocked && !loadingManual) fileRef.current?.click();
                 }}
                 onKeyDown={(e) => {
-                  if (!scanning && !retryBlocked && (e.key === "Enter" || e.key === " ")) {
+                  if (
+                    !scanning &&
+                    !retryBlocked &&
+                    !loadingManual &&
+                    (e.key === "Enter" || e.key === " ")
+                  ) {
                     e.preventDefault();
                     fileRef.current?.click();
                   }
@@ -667,8 +792,17 @@ export default function LogSheetClient({
           )}
 
           <div className="row">
-            <button type="button" className="btn btn--secondary" onClick={startManual}>
-              {started ? "Reset to a blank table" : "Fill it in by hand instead"}
+            <button
+              type="button"
+              className="btn btn--secondary"
+              disabled={loadingManual || scanning || !gradeId}
+              onClick={() => void startManual()}
+            >
+              {loadingManual
+                ? "Loading dates and class list…"
+                : started
+                  ? "Reload dates and class list"
+                  : "Fill it in by hand instead"}
             </button>
           </div>
 
@@ -692,8 +826,10 @@ export default function LogSheetClient({
         <section className="card">
           <h2 className="card-title">3. Check every value</h2>
           <p className="card-sub" style={{ marginBottom: "var(--space-4)" }}>
-            Amber cells are ones the scan was unsure about. Untick a date to leave it out of
-            this save. Nothing is written until you press Save.
+            {reviewSource === "manual"
+              ? "The grade dates and this class list are loaded automatically. Untick a saved date unless you mean to replace it."
+              : "Amber cells are ones the scan was unsure about. Untick a date to leave it out of this save."}{" "}
+            Nothing is written until you press Save.
           </p>
 
           <div className="stack">
@@ -794,14 +930,14 @@ export default function LogSheetClient({
                           style={{ opacity: c.include ? 1 : 0.4 }}
                           title="Attendance"
                         >
-                          A
+                          Attendance
                         </th>
                         <th
                           className="col-qt"
                           style={{ opacity: c.include ? 1 : 0.4 }}
                           title="QT pages"
                         >
-                          Q
+                          QT pages
                         </th>
                       </Fragment>
                     ))}
@@ -865,7 +1001,7 @@ export default function LogSheetClient({
                                 }`}
                                 onClick={() => setCell(ri, ci, { here: !cell?.here })}
                               >
-                                {cell?.here ? "✓" : "–"}
+                                {cell?.here ? "Present" : "Absent"}
                               </button>
                             </td>
                             <td

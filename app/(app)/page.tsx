@@ -3,6 +3,8 @@ import { queryOne } from "@/lib/db";
 import { listGrades, listClasses } from "@/lib/repo";
 import NewGradeClass from "./new-grade-class";
 import { withRequestDb } from "@/lib/demo";
+import { getCurrentUser } from "@/lib/auth";
+import DeleteGradeButton from "./delete-grade-button";
 
 export const dynamic = "force-dynamic";
 
@@ -32,8 +34,9 @@ async function classStats(classId: number): Promise<ClassStat> {
 }
 
 export default async function DashboardPage() {
-  const grades = await withRequestDb(async () =>
-    Promise.all(
+  const { grades, isAdmin } = await withRequestDb(async () => ({
+    isAdmin: (await getCurrentUser())?.role === "admin",
+    grades: await Promise.all(
       (await listGrades()).map(async (g) => ({
         ...g,
         classes: await Promise.all(
@@ -44,7 +47,7 @@ export default async function DashboardPage() {
         ),
       })),
     ),
-  );
+  }));
 
   return (
     <main className="main">
@@ -99,6 +102,9 @@ export default async function DashboardPage() {
                   >
                     Cards
                   </Link>
+                  {isAdmin && grade.classes.length === 0 && (
+                    <DeleteGradeButton id={grade.id} name={grade.name} />
+                  )}
                 </div>
               </div>
 
