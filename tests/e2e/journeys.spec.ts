@@ -121,8 +121,11 @@ test.describe("logging a sheet by hand", () => {
       .locator('input[aria-label^="English name, row"]')
       .evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value));
     expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })));
-    await expect(page.locator('button.att-toggle[data-here="false"]').first()).toHaveText("Absent");
-    await expect(page.locator('button.att-toggle[data-here="true"]').first()).toHaveText("Present");
+    const attendance = page.locator("button.att-toggle").first();
+    const beganPresent = (await attendance.getAttribute("data-here")) === "true";
+    await expect(attendance).toHaveText(beganPresent ? "Present" : "Absent");
+    await attendance.click();
+    await expect(attendance).toHaveText(beganPresent ? "Absent" : "Present");
   });
 
   test("discards a roster response when the selected class changes while loading", async ({

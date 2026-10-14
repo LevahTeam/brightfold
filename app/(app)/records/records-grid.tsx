@@ -32,13 +32,16 @@ export default function RecordsGrid({
   weeks,
   rows,
   showClassHeaders,
-  canDelete,
+  canManageData,
+  canDeleteWeeks,
 }: {
   weeks: Week[];
   rows: RecordsKidRow[];
   showClassHeaders: boolean;
-  /** Deleting a week wipes a column from every class, so it is admin only. */
-  canDelete: boolean;
+  /** Signed-in staff may remove mistaken students. */
+  canManageData: boolean;
+  /** Shared week columns remain pastor-only because they affect every class. */
+  canDeleteWeeks: boolean;
 }) {
   const router = useRouter();
   const [edits, setEdits] = useState<Record<CellKey, LocalCell>>({});
@@ -218,6 +221,28 @@ export default function RecordsGrid({
     }
   }
 
+  async function removeKid(kidId: number, name: string, classLabel: string) {
+    if (
+      !window.confirm(
+        `Delete student “${name}” from “${classLabel}”?\n\nThis permanently deletes all of this student's attendance and QT data. This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    try {
+      const res = await fetch(`/api/kids/${kidId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(data.error ?? "That student could not be deleted.");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setError("Could not reach the server, so that student was not deleted.");
+    }
+  }
+
 
   const activeWeek = weeks[Math.min(weekIdx, weeks.length - 1)];
 
@@ -310,6 +335,15 @@ export default function RecordsGrid({
                     }}
                   />
                   {showClassHeaders && <div className="class-tag">{row.class_label}</div>}
+                  {canManageData && (
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--sm"
+                      onClick={() => void removeKid(row.kid_id, row.english_name, row.class_label)}
+                    >
+                      Delete student
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -336,7 +370,7 @@ export default function RecordsGrid({
                 <th key={w.id} colSpan={2} className="week-group">
                   <span className="week-head">
                     {w.label}
-                    {canDelete && (
+                    {canDeleteWeeks && (
                       <button
                         type="button"
                         className="week-del"
@@ -353,6 +387,7 @@ export default function RecordsGrid({
               <th className="col-total" rowSpan={2}>
                 Total
               </th>
+              {canManageData && <th rowSpan={2}>Actions</th>}
             </tr>
             <tr>
               {weeks.map((w) => (
@@ -377,7 +412,9 @@ export default function RecordsGrid({
                 <Fragment key={row.kid_id}>
                   {showHeader && (
                     <tr className="class-header-row">
-                      <td colSpan={weeks.length * 2 + 3}>{row.class_label}</td>
+                      <td colSpan={weeks.length * 2 + 3 + (canManageData ? 1 : 0)}>
+                        {row.class_label}
+                      </td>
                     </tr>
                   )}
                   <tr>
@@ -474,6 +511,19 @@ export default function RecordsGrid({
                     })}
 
                     <td className="col-total">{totalOf(row)}</td>
+                    {canManageData && (
+                      <td>
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--sm"
+                          onClick={() =>
+                            void removeKid(row.kid_id, row.english_name, row.class_label)
+                          }
+                        >
+                          Delete student
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 </Fragment>
               );

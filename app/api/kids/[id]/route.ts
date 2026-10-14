@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { updateKid, archiveKid } from "@/lib/repo";
-import { withAuth, withAdmin, readJson, requireInt, requireString } from "@/lib/api";
+import { updateKid, deleteKid } from "@/lib/repo";
+import { withAuth, readJson, requireInt, requireString } from "@/lib/api";
 
 export const runtime = "nodejs";
 
@@ -23,10 +23,7 @@ export const PATCH = withAuth<Ctx>(async (user, req, ctx) => {
   return NextResponse.json({ ok: true });
 });
 
-export const DELETE = withAdmin<Ctx>(async (user, _req, ctx) => {
+export const DELETE = withAuth<Ctx>(async (user, _req, ctx) => {
   const kidId = requireInt((await ctx.params).id, "Kid id");
-  // Archive rather than delete: their past weeks stay intact for totals and
-  // for any card already printed.
-  await archiveKid(kidId, user.username);
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, ...(await deleteKid(kidId, user.username)) });
 });

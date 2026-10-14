@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS users (
   username      TEXT NOT NULL UNIQUE COLLATE NOCASE,
   display_name  TEXT NOT NULL,
   password_hash TEXT NOT NULL,
-  -- 'admin' can delete; 'member' can log sheets and correct entries.
+  -- 'admin' manages grade-wide weeks/activity; both staff roles can correct imports.
   role          TEXT NOT NULL DEFAULT 'member',
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );

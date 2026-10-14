@@ -39,7 +39,10 @@ Save.
 
 **Records** — A spreadsheet-style view with one child per row, an Attendance
 and QT pair for each week, and a running total. Fix any cell directly without
-uploading the picture again.
+uploading the picture again. Signed-in staff can remove a mistaken student,
+clear one uploaded date from one class, clear all history for a class, or
+delete a mistaken class. Deleting a shared grade-wide date remains pastor-only.
+Either signed-in staff member can also delete an empty grade from Classes.
 
 **Print cards** — Each child gets a point card with their names, class, weekly
 history, total pages, and a passport stamp. The print layout puts two cards on

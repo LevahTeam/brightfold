@@ -21,6 +21,10 @@ const {
   getLoggedWeekLabels,
   listKids,
   deleteEmptyGrade,
+  deleteClass,
+  clearClassEntries,
+  clearClassWeekEntries,
+  deleteKid,
   assertWeekMatchesKid,
   ValidationError,
 } = await import("@/lib/repo");
@@ -75,9 +79,137 @@ describe("grades and classes", () => {
   it("rejects deletion of a grade that does not exist", async () => {
     await expect(deleteEmptyGrade(999_999, "pastor")).rejects.toThrow(/does not exist/i);
   });
+
+  it("deletes one class and its imported data without touching the grade or another class", async () => {
+    const grade = await createGrade("5th Grade");
+    const wrong = await createClass(grade.id, "Wrong Class", null);
+    const right = await createClass(grade.id, "Right Class", null);
+    const week = await upsertWeek(grade.id, "10/11", "2026-10-11");
+    const wrongKid = await upsertKid(wrong.id, "Wrong Kid", null);
+    const rightKid = await upsertKid(right.id, "Right Kid", null);
+    await setEntry(wrongKid.id, week.id, "HERE", 5, null);
+    await setEntry(rightKid.id, week.id, "HERE", 7, null);
+
+    await expect(deleteClass(wrong.id, "amy")).resolves.toEqual({
+      label: "Wrong Class",
+      kidsRemoved: 1,
+      entriesRemoved: 1,
+    });
+    expect(await queryOne("SELECT id FROM grades WHERE id = ?", grade.id)).not.toBeNull();
+    expect(await queryOne("SELECT id FROM weeks WHERE id = ?", week.id)).not.toBeNull();
+    expect(await queryOne("SELECT id FROM classes WHERE id = ?", right.id)).not.toBeNull();
+    expect(await queryOne("SELECT id FROM entries WHERE kid_id = ?", rightKid.id)).not.toBeNull();
+    expect(
+      await queryOne(
+        "SELECT actor, action, entity_type FROM audit_events WHERE entity_id = ?",
+        String(wrong.id),
+      ),
+    ).toEqual({ actor: "amy", action: "delete", entity_type: "class" });
+  });
+
+  it("clears only one class's entries and preserves both rosters", async () => {
+    const grade = await createGrade("5th Grade");
+    const wrong = await createClass(grade.id, "Wrong Class", null);
+    const right = await createClass(grade.id, "Right Class", null);
+    const week = await upsertWeek(grade.id, "10/11", "2026-10-11");
+    const wrongKid = await upsertKid(wrong.id, "Wrong Kid", null);
+    const rightKid = await upsertKid(right.id, "Right Kid", null);
+    await setEntry(wrongKid.id, week.id, "HERE", 5, null);
+    await setEntry(rightKid.id, week.id, "HERE", 7, null);
+
+    await expect(clearClassEntries(wrong.id, "amy")).resolves.toEqual({
+      label: "Wrong Class",
+      entriesRemoved: 1,
+    });
+    expect(await queryOne("SELECT id FROM kids WHERE id = ?", wrongKid.id)).not.toBeNull();
+    expect(await queryOne("SELECT id FROM entries WHERE kid_id = ?", wrongKid.id)).toBeNull();
+    expect(await queryOne("SELECT id FROM entries WHERE kid_id = ?", rightKid.id)).not.toBeNull();
+    expect(
+      await queryOne(
+        "SELECT actor, action, entity_type FROM audit_events WHERE entity_id = ?",
+        String(wrong.id),
+      ),
+    ).toEqual({ actor: "amy", action: "clear", entity_type: "class_entries" });
+  });
+
+  it("clears one class and week while preserving its other weeks and other classes", async () => {
+    const grade = await createGrade("5th Grade");
+    const wrong = await createClass(grade.id, "Wrong Class", null);
+    const right = await createClass(grade.id, "Right Class", null);
+    const earlier = await upsertWeek(grade.id, "10/4", "2026-10-04");
+    const mistaken = await upsertWeek(grade.id, "10/11", "2026-10-11");
+    const wrongKid = await upsertKid(wrong.id, "Wrong Kid", null);
+    const rightKid = await upsertKid(right.id, "Right Kid", null);
+    await setEntry(wrongKid.id, earlier.id, "HERE", 3, null);
+    await setEntry(wrongKid.id, mistaken.id, "HERE", 5, null);
+    await setEntry(rightKid.id, mistaken.id, "HERE", 7, null);
+
+    await expect(clearClassWeekEntries(wrong.id, mistaken.id, "amy")).resolves.toEqual({
+      classLabel: "Wrong Class",
+      weekLabel: "10/11",
+      entriesRemoved: 1,
+    });
+    expect(
+      await queryOne("SELECT id FROM entries WHERE kid_id = ? AND week_id = ?", wrongKid.id, mistaken.id),
+    ).toBeNull();
+    expect(
+      await queryOne("SELECT id FROM entries WHERE kid_id = ? AND week_id = ?", wrongKid.id, earlier.id),
+    ).not.toBeNull();
+    expect(
+      await queryOne("SELECT id FROM entries WHERE kid_id = ? AND week_id = ?", rightKid.id, mistaken.id),
+    ).not.toBeNull();
+    expect(await queryOne("SELECT id FROM kids WHERE id = ?", wrongKid.id)).not.toBeNull();
+    expect(await queryOne("SELECT id FROM weeks WHERE id = ?", mistaken.id)).not.toBeNull();
+    expect(
+      await queryOne(
+        "SELECT actor, action, entity_type FROM audit_events WHERE entity_id = ?",
+        `${wrong.id}:${mistaken.id}`,
+      ),
+    ).toEqual({ actor: "amy", action: "clear", entity_type: "class_week_entries" });
+  });
+
+  it("rejects class deletion and clearing for an unknown class", async () => {
+    await expect(deleteClass(999_999, "amy")).rejects.toThrow(/does not exist/i);
+    await expect(clearClassEntries(999_999, "amy")).rejects.toThrow(/does not exist/i);
+    await expect(clearClassWeekEntries(999_999, 1, "amy")).rejects.toThrow(/does not exist/i);
+  });
+
+  it("refuses to clear a class with a week from another grade", async () => {
+    const grade = await createGrade("5th Grade");
+    const other = await createGrade("4th Grade");
+    const cls = await createClass(grade.id, "A", null);
+    const foreignWeek = await upsertWeek(other.id, "10/11", "2026-10-11");
+    await expect(clearClassWeekEntries(cls.id, foreignWeek.id, "amy")).rejects.toThrow(
+      /different grade/i,
+    );
+  });
 });
 
 describe("upsertKid name matching", () => {
+  it("permanently deletes a mistaken student and their entries", async () => {
+    const grade = await createGrade("5th Grade");
+    const cls = await createClass(grade.id, "A", null);
+    const week = await upsertWeek(grade.id, "10/11", "2026-10-11");
+    const kid = await upsertKid(cls.id, "Mistake", null);
+    await setEntry(kid.id, week.id, "HERE", 4, null);
+
+    await expect(deleteKid(kid.id, "amy")).resolves.toEqual({
+      name: "Mistake",
+      entriesRemoved: 1,
+    });
+    expect(await queryOne("SELECT id FROM kids WHERE id = ?", kid.id)).toBeNull();
+    expect(await queryOne("SELECT id FROM entries WHERE kid_id = ?", kid.id)).toBeNull();
+    expect(
+      await queryOne(
+        "SELECT actor, action, entity_type FROM audit_events WHERE entity_id = ?",
+        String(kid.id),
+      ),
+    ).toEqual({ actor: "amy", action: "delete", entity_type: "kid" });
+  });
+
+  it("rejects deletion of an unknown student", async () => {
+    await expect(deleteKid(999_999, "amy")).rejects.toThrow(/does not exist/i);
+  });
   it("returns the active class list alphabetically regardless of entry order", async () => {
     const grade = await createGrade("5th Grade");
     const cls = await createClass(grade.id, "A 5-2", null);

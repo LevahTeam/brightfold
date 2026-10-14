@@ -59,8 +59,8 @@ async function seedUser(
 
 async function main(): Promise<void> {
   console.log("\nAccounts");
-  // The pastor is the admin: only that account can delete a week or remove a
-  // child. The volunteer can log sheets and correct entries.
+  // Both staff accounts can correct mistaken imports. The pastor additionally
+  // manages grades, shared grade-wide dates, and the protected activity log.
   await seedUser("volunteer", "Volunteer", "QTP_SEED_VOLUNTEER_PW", "member");
   await seedUser("pastor", "Pastor", "QTP_SEED_PASTOR_PW", "admin");
 

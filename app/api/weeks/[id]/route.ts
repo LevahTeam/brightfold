@@ -7,8 +7,8 @@ export const runtime = "nodejs";
 type Ctx = { params: Promise<{ id: string }> };
 
 /**
- * Remove a week and every entry in it. Admin only — this wipes a column from
- * every class in the grade, so it is not something to do by accident.
+ * Remove a week and every entry in it. Admin only because this wipes a column
+ * from every class in the grade.
  *
  * Weeks are grade-scoped, so a column created by a mistyped label or an
  * interrupted save shows up in every class in that grade, on every Records

@@ -1,6 +1,6 @@
 export type Attendance = "HERE" | "ABSENT";
 
-/** 'admin' may delete; 'member' may log sheets and correct entries. */
+/** 'admin' manages grade-wide weeks and activity; both staff roles may correct imports. */
 export type Role = "admin" | "member";
 
 export interface User {

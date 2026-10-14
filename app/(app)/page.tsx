@@ -3,13 +3,15 @@ import { queryOne } from "@/lib/db";
 import { listGrades, listClasses } from "@/lib/repo";
 import NewGradeClass from "./new-grade-class";
 import { withRequestDb } from "@/lib/demo";
-import { getCurrentUser } from "@/lib/auth";
 import DeleteGradeButton from "./delete-grade-button";
+import DeleteClassButton from "./delete-class-button";
 
 export const dynamic = "force-dynamic";
 
 interface ClassStat {
   kids: number;
+  all_kids: number;
+  entries: number;
   weeks_logged: number;
   total_pages: number;
 }
@@ -18,15 +20,21 @@ async function classStats(classId: number): Promise<ClassStat> {
   return (await queryOne<ClassStat>(
     `SELECT
          (SELECT COUNT(*) FROM kids WHERE class_id = ? AND archived = 0) AS kids,
+         (SELECT COUNT(*) FROM kids WHERE class_id = ?) AS all_kids,
          -- Weeks this class actually has data for. Records shows every week
          -- in the grade, so the two numbers differ by design; the column is
          -- labelled "Weeks logged" to say which one this is.
          (SELECT COUNT(DISTINCT e.week_id)
             FROM entries e JOIN kids k ON k.id = e.kid_id
            WHERE k.class_id = ? AND k.archived = 0) AS weeks_logged,
+         (SELECT COUNT(*)
+            FROM entries e JOIN kids k ON k.id = e.kid_id
+           WHERE k.class_id = ?) AS entries,
          (SELECT COALESCE(SUM(e.qt_pages), 0)
             FROM entries e JOIN kids k ON k.id = e.kid_id
            WHERE k.class_id = ? AND k.archived = 0) AS total_pages`,
+    classId,
+    classId,
     classId,
     classId,
     classId,
@@ -34,9 +42,8 @@ async function classStats(classId: number): Promise<ClassStat> {
 }
 
 export default async function DashboardPage() {
-  const { grades, isAdmin } = await withRequestDb(async () => ({
-    isAdmin: (await getCurrentUser())?.role === "admin",
-    grades: await Promise.all(
+  const grades = await withRequestDb(async () =>
+    Promise.all(
       (await listGrades()).map(async (g) => ({
         ...g,
         classes: await Promise.all(
@@ -47,7 +54,7 @@ export default async function DashboardPage() {
         ),
       })),
     ),
-  }));
+  );
 
   return (
     <main className="main">
@@ -102,7 +109,7 @@ export default async function DashboardPage() {
                   >
                     Cards
                   </Link>
-                  {isAdmin && grade.classes.length === 0 && (
+                  {grade.classes.length === 0 && (
                     <DeleteGradeButton id={grade.id} name={grade.name} />
                   )}
                 </div>
@@ -141,6 +148,12 @@ export default async function DashboardPage() {
                             >
                               Open
                             </Link>
+                            <DeleteClassButton
+                              id={c.id}
+                              label={c.label}
+                              kids={c.stats.all_kids}
+                              entries={c.stats.entries}
+                            />
                           </td>
                         </tr>
                       ))}

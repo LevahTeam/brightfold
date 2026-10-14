@@ -133,6 +133,123 @@ export async function createClass(
   ))!;
 }
 
+/** Delete one class and its roster/entries, leaving the grade and shared weeks intact. */
+export async function deleteClass(
+  classId: number,
+  updatedBy: string | null = null,
+): Promise<{ label: string; kidsRemoved: number; entriesRemoved: number }> {
+  return tx(async () => {
+    const cls = await getClass(classId);
+    if (!cls) throw new ValidationError("That class does not exist.");
+    const counts = await queryOne<{ kids: number; entries: number }>(
+      `SELECT
+         (SELECT COUNT(*) FROM kids WHERE class_id = ?) AS kids,
+         (SELECT COUNT(*) FROM entries e JOIN kids k ON k.id = e.kid_id
+           WHERE k.class_id = ?) AS entries`,
+      classId,
+      classId,
+    );
+    await execute("DELETE FROM classes WHERE id = ?", classId);
+    await recordAuditEvent({
+      actor: updatedBy,
+      action: "delete",
+      entityType: "class",
+      entityId: classId,
+      before: {
+        label: cls.label,
+        grade_id: cls.grade_id,
+        kids: counts?.kids ?? 0,
+        entries: counts?.entries ?? 0,
+      },
+      after: null,
+    });
+    return {
+      label: cls.label,
+      kidsRemoved: counts?.kids ?? 0,
+      entriesRemoved: counts?.entries ?? 0,
+    };
+  });
+}
+
+/** Remove imported attendance from one class while preserving its roster. */
+export async function clearClassEntries(
+  classId: number,
+  updatedBy: string | null = null,
+): Promise<{ label: string; entriesRemoved: number }> {
+  return tx(async () => {
+    const cls = await getClass(classId);
+    if (!cls) throw new ValidationError("That class does not exist.");
+    const count = await queryOne<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM entries e
+        JOIN kids k ON k.id = e.kid_id
+       WHERE k.class_id = ?`,
+      classId,
+    );
+    await execute(
+      "DELETE FROM entries WHERE kid_id IN (SELECT id FROM kids WHERE class_id = ?)",
+      classId,
+    );
+    await recordAuditEvent({
+      actor: updatedBy,
+      action: "clear",
+      entityType: "class_entries",
+      entityId: classId,
+      before: { class_label: cls.label, entries: count?.n ?? 0 },
+      after: { entries: 0 },
+    });
+    return { label: cls.label, entriesRemoved: count?.n ?? 0 };
+  });
+}
+
+/** Remove one imported date from one class without affecting shared grade dates. */
+export async function clearClassWeekEntries(
+  classId: number,
+  weekId: number,
+  updatedBy: string | null = null,
+): Promise<{ classLabel: string; weekLabel: string; entriesRemoved: number }> {
+  return tx(async () => {
+    const cls = await getClass(classId);
+    if (!cls) throw new ValidationError("That class does not exist.");
+    const week = await queryOne<Week>(`SELECT ${WEEK_COLS} FROM weeks WHERE id = ?`, weekId);
+    if (!week) throw new ValidationError("That week does not exist.");
+    if (week.grade_id !== cls.grade_id) {
+      throw new ValidationError("That week belongs to a different grade.");
+    }
+
+    const count = await queryOne<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM entries e
+        JOIN kids k ON k.id = e.kid_id
+       WHERE k.class_id = ? AND e.week_id = ?`,
+      classId,
+      weekId,
+    );
+    await execute(
+      `DELETE FROM entries
+        WHERE week_id = ?
+          AND kid_id IN (SELECT id FROM kids WHERE class_id = ?)`,
+      weekId,
+      classId,
+    );
+    await recordAuditEvent({
+      actor: updatedBy,
+      action: "clear",
+      entityType: "class_week_entries",
+      entityId: `${classId}:${weekId}`,
+      before: {
+        class_label: cls.label,
+        week_label: week.label,
+        entries: count?.n ?? 0,
+      },
+      after: { entries: 0 },
+    });
+    return {
+      classLabel: cls.label,
+      weekLabel: week.label,
+      entriesRemoved: count?.n ?? 0,
+    };
+  });
+}
+
 // -------------------------------------------------------------------- kids
 
 export async function listKids(classId: number): Promise<Kid[]> {
@@ -242,6 +359,40 @@ export async function archiveKid(kidId: number, updatedBy: string | null = null)
       before: { english_name: kid.english_name, archived: kid.archived },
       after: { english_name: kid.english_name, archived: 1 },
     });
+  });
+}
+
+/** Permanently remove a mistaken student and all of their imported entries. */
+export async function deleteKid(
+  kidId: number,
+  updatedBy: string | null = null,
+): Promise<{ name: string; entriesRemoved: number }> {
+  return tx(async () => {
+    const kid = await queryOne<Kid>(
+      `SELECT id, class_id, english_name, korean_name, sort_order, archived
+         FROM kids WHERE id = ?`,
+      kidId,
+    );
+    if (!kid) throw new ValidationError("That kid does not exist.");
+    const count = await queryOne<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM entries WHERE kid_id = ?",
+      kidId,
+    );
+    await execute("DELETE FROM kids WHERE id = ?", kidId);
+    await recordAuditEvent({
+      actor: updatedBy,
+      action: "delete",
+      entityType: "kid",
+      entityId: kidId,
+      before: {
+        english_name: kid.english_name,
+        korean_name: kid.korean_name,
+        class_id: kid.class_id,
+        entries: count?.n ?? 0,
+      },
+      after: null,
+    });
+    return { name: kid.english_name, entriesRemoved: count?.n ?? 0 };
   });
 }
 

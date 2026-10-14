@@ -22,6 +22,22 @@ test.describe("access control", () => {
     }
   });
 
+  test("destructive APIs refuse anonymous requests", async ({ request }) => {
+    const paths = [
+      "/api/grades/1",
+      "/api/classes/1",
+      "/api/classes/1/entries",
+      "/api/classes/1/weeks/1",
+      "/api/kids/1",
+      "/api/weeks/1",
+    ];
+
+    for (const path of paths) {
+      const res = await request.delete(path);
+      expect(res.status(), `${path} should be 401`).toBe(401);
+    }
+  });
+
   test("a wrong password is rejected with a non-committal message", async ({ page }) => {
     await page.goto("/login");
     await page.getByLabel("Username").fill("volunteer");

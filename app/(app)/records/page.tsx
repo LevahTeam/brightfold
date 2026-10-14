@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listGrades, listClasses, getRecords } from "@/lib/repo";
 import RecordsGrid from "./records-grid";
+import ClassDataActions from "./class-data-actions";
 import { withRequestDb } from "@/lib/demo";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -52,6 +53,13 @@ export default async function RecordsPage({
           </p>
         </div>
         <div className="row">
+          {classId && (
+            <ClassDataActions
+              classId={classId}
+              classLabel={classes.find((c) => c.id === classId)?.label ?? "this class"}
+              weeks={weeks}
+            />
+          )}
           <Link
             prefetch={false}
             href={`/cards?gradeId=${grade.id}${classId ? `&classId=${classId}` : ""}`}
@@ -115,7 +123,8 @@ export default async function RecordsPage({
           weeks={weeks}
           rows={rows}
           showClassHeaders={classId === undefined}
-          canDelete={user?.role === "admin"}
+          canManageData
+          canDeleteWeeks={user?.role === "admin"}
         />
       )}
     </main>
